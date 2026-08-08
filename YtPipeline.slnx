@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/YtPipeline.Cli/YtPipeline.Cli.csproj" />
+    <Project Path="src/YtPipeline.Core/YtPipeline.Core.csproj" />
+    <Project Path="src/YtPipeline.Stages/YtPipeline.Stages.csproj" />
+    <Project Path="src/YtPipeline.Web/YtPipeline.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/YtPipeline.Tests/YtPipeline.Tests.csproj" />
+  </Folder>
+</Solution>

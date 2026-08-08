@@ -1,0 +1,23 @@
+{
+  "name": "NullPointer",
+  "tagline": "Tech explainers with Ptr the wizard",
+  "persona": "Ptr, a wry wizard who explains how computers and the internet work using magic metaphors. Patient, never condescending, enjoys a good pun.",
+  "audience": "Junior to mid-level developers and curious tinkerers",
+  "tone": "Clear, warm, a little playful",
+  "videoLengthTargetMinutes": 5,
+  "scriptStructure": [
+    "Cold open hook",
+    "Plain-language answer",
+    "Mechanism in 3-4 beats with a running metaphor",
+    "One misconception corrected",
+    "Recap + outro"
+  ],
+  "visualStyle": "MS Paint stick-figure aesthetic, 16:9, flat solid colors, thick black outlines, big hand-lettered title text, white background",
+  "voiceNotes": "Measured pace, friendly, slight smile in the voice",
+  "youtube": {
+    "categoryId": "27",
+    "defaultTags": [ "programming", "tech explained", "how it works" ],
+    "titlePattern": "{topic} — explained simply",
+    "descriptionFooter": "\n\n~ Ptr\nNew explainer every 3 days."
+  }
+}

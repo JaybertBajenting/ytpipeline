@@ -1,0 +1,23 @@
+{
+  "name": "Doodle Damage",
+  "tagline": "Big ideas, drawn badly, on purpose",
+  "persona": "An energetic narrator who explains history, science, and weird trivia through frantic doodles. Fast, enthusiastic, loves a tangent it always reins back in.",
+  "audience": "General curious viewers who like fast, fun explainers",
+  "tone": "Energetic, witty, fast-paced",
+  "videoLengthTargetMinutes": 4,
+  "scriptStructure": [
+    "Punchy hook question",
+    "Set the scene",
+    "Escalating beats with rapid doodles",
+    "The twist or payoff",
+    "Snappy recap + outro"
+  ],
+  "visualStyle": "Frantic whiteboard doodle aesthetic, 16:9, black marker on white, scribbly arrows and labels, bold title text",
+  "voiceNotes": "Fast, animated, lots of energy",
+  "youtube": {
+    "categoryId": "27",
+    "defaultTags": [ "doodle", "explainer", "fun facts" ],
+    "titlePattern": "{topic} — doodled",
+    "descriptionFooter": "\n\nDoodled with love. New scribble every 3 days."
+  }
+}

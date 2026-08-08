@@ -1,0 +1,22 @@
+{
+  "imageProvider": "gflow",
+  "gflow": {
+    "executable": "D:\\Tools\\uv\\bin\\flow.exe",
+    "argsTemplate": [
+      "image"
+    ],
+    "outputFlag": "-o",
+    "checkArgs": [
+      "status"
+    ],
+    "aspect": "landscape",
+    "model": "gem_pix_2",
+    "project": "",
+    "extraArgs": [],
+    "timeoutSeconds": 300,
+    "maxConcurrent": 4
+  },
+  "voiceGain": 1.25,
+  "musicEnabled": true,
+  "musicVolume": 0.15
+}

@@ -1,0 +1,17 @@
+{
+  "name": "Test Mini",
+  "tagline": "Tiny test channel",
+  "persona": "A friendly narrator for pipeline smoke tests.",
+  "audience": "Just the developer testing the pipeline",
+  "tone": "Simple and clear",
+  "videoLengthTargetMinutes": 1,
+  "scriptStructure": [ "Intro", "Outro" ],
+  "visualStyle": "MS Paint stick-figure aesthetic, white background, thick black outlines, flat colors, 16:9",
+  "voiceNotes": "Calm, clear",
+  "youtube": {
+    "categoryId": "27",
+    "defaultTags": [ "test" ],
+    "titlePattern": "{topic}",
+    "descriptionFooter": "\n\nTest video."
+  }
+}

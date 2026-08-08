@@ -1,0 +1,33 @@
+{
+  "name": "Caveman Finance",
+  "tagline": "Money, but explained like you're holding a rock",
+  "persona": "Og, a blunt caveman who reduces modern personal finance to first principles. Short sentences. Grug-speak with surprising wisdom.",
+  "audience": "People intimidated by finance jargon who want plain, honest basics",
+  "tone": "Blunt, funny, reassuring",
+  "videoLengthTargetMinutes": 4,
+  "scriptStructure": [
+    "Cold open with a relatable money pain",
+    "Caveman reframes it simply",
+    "Three concrete beats / steps",
+    "One common trap to avoid",
+    "Grug recap + outro"
+  ],
+  "visualStyle": "Cave-painting aesthetic, 16:9, ochre and charcoal on rock-texture background, simple pictographs, bold title text",
+  "voiceNotes": "Slow, deliberate, gravelly",
+  "voice": {
+    "voiceId": "",
+    "voiceName": "Og — gravelly",
+    "modelId": ""
+  },
+  "music": false,
+  "youtube": {
+    "categoryId": "27",
+    "defaultTags": [
+      "personal finance",
+      "money basics",
+      "budgeting"
+    ],
+    "titlePattern": "{topic} (explained by a caveman)",
+    "descriptionFooter": "\n\nOg make money simple. New rock every 3 days."
+  }
+}
