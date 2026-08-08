@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import {
-  ArrowLeft, CalendarDays, Camera, Clock, Download, ExternalLink, ThumbsUp, Trash2,
+  ArrowLeft, CalendarDays, Camera, Clock, Download, ExternalLink, Square, ThumbsUp, Trash2,
 } from "lucide-react";
 import { api, type StageStatus } from "@/lib/api";
 import {
@@ -123,7 +123,20 @@ export function RunDetail({ runId }: { runId: string }) {
             <span className="text-[10px] text-white/20">Plan only — nothing uploads on a timer.</span>
           </div>
         </div>
-        {busy && <Badge tone="run"><Spinner /> {activeStage ?? job?.stage}…</Badge>}
+        {busy && (
+          <div className="flex shrink-0 items-center gap-2">
+            <Badge tone="run"><Spinner /> {activeStage ?? job?.stage}…</Badge>
+            {/* Also in the log overlay, but that can be dismissed — this stays put. */}
+            <Button
+              size="xs" variant="danger"
+              loading={cancel.isPending}
+              title="Stop the running job"
+              onClick={() => jobId && cancel.mutate(jobId)}
+            >
+              <Square className="size-2.5 fill-current" /> Stop
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* ── Stage pipeline ──────────────────────────────────────────────── */}

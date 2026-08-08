@@ -29,6 +29,31 @@
   --violet:    #a78bfa;
 }
 
+/* ─── Interactive cursors ───────────────────────────────────────────────────
+   Tailwind v4's preflight leaves <button> on the browser default (an arrow), so
+   every button in the app looked unclickable. Set it once here rather than adding
+   cursor-pointer to dozens of components. Utilities still win — Button's
+   `disabled:cursor-not-allowed` overrides this because it lands in the utilities layer. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  label[for],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  input[type="range"]:not(:disabled),
+  input[type="date"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  select:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+}
+
 html, body, #root { height: 100%; }
 
 body {

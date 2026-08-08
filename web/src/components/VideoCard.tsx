@@ -1,12 +1,12 @@
 import {
   CalendarDays, Camera, CheckCircle2, Film, Image as ImageIcon, Mic, MonitorPlay,
-  Rocket, ThumbsUp, Trash2, Volume2,
+  Rocket, Square, ThumbsUp, Trash2, Volume2,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { api, stagesDone, type Manifest, type StageName, type StageStatus } from "@/lib/api";
-import { useRunStage } from "@/lib/hooks";
+import { useCancelJob, useJob, useRunStage } from "@/lib/hooks";
 import { useUi } from "@/lib/store";
-import { Badge, Card, Progress, Spinner } from "./ui";
+import { Badge, Button, Card, Progress, Spinner } from "./ui";
 import { cn } from "@/lib/utils";
 
 const STAGE_ICONS = [
@@ -36,8 +36,13 @@ export function VideoCard({
   m, index, onDelete,
 }: { m: Manifest; index: number; onDelete?: (m: Manifest) => void }) {
   const select = useUi((s) => s.select);
-  const running = useUi((s) => !!s.jobs[m.runId]);
+  const jobId = useUi((s) => s.jobs[m.runId]) ?? null;
+  const running = !!jobId;
   const stage = useRunStage(m.runId);
+  const cancel = useCancelJob();
+  // Only polls when this card actually has a job (enabled: !!jobId), so a grid of 17 cards
+  // isn't 17 pollers — it's however many are working.
+  const job = useJob(jobId, m.runId);
 
   const done = stagesDone(m);
   const st = m.stages;
@@ -155,36 +160,57 @@ export function VideoCard({
         </div>
       </div>
 
-      {/* ── Publish row (does NOT open detail) ──────────────────────────── */}
-      <div
-        className="grid grid-cols-4 gap-1 border-t border-white/[0.06] bg-white/[0.015] p-1.5"
-        title={gateReason}
-      >
-        <PublishButton
-          label="All" icon={<Rocket className="size-3" />} primary
-          disabled={!canPublish}
-          onClick={() => run("publish-all")}
-          tip={gateReason || "Publish to every configured target"}
-        />
-        <PublishButton
-          label="YT" icon={<MonitorPlay className="size-3" />}
-          status={st.upload} disabled={!canPublish}
-          onClick={() => run("upload")}
-          tip={gateReason || statusTip("YouTube", st.upload)}
-        />
-        <PublishButton
-          label="FB" icon={<ThumbsUp className="size-3" />}
-          status={st.facebook} disabled={!canPublish}
-          onClick={() => run("facebook")}
-          tip={gateReason || statusTip("Facebook", st.facebook)}
-        />
-        <PublishButton
-          label="IG" icon={<Camera className="size-3" />}
-          status={st.instagram} disabled={!canPublish}
-          onClick={() => run("instagram")}
-          tip={gateReason || statusTip("Instagram", st.instagram)}
-        />
-      </div>
+      {/* ── Publish row / running row (does NOT open detail) ────────────── */}
+      {running ? (
+        // While a job runs, the four actions are useless (all disabled) — so the row becomes the
+        // way to stop it. Previously the only Stop lived in the detail view's log overlay, which
+        // meant a job started from the grid couldn't be cancelled from the grid.
+        <div className="flex items-center gap-2 border-t border-amber-500/25 bg-amber-500/[0.06] px-2 py-1.5">
+          <Spinner className="size-3 shrink-0 text-amber-400" />
+          <span className="min-w-0 flex-1 truncate text-[10px] font-medium text-amber-400">
+            {job?.stage ? `${job.stage}…` : "working…"}
+          </span>
+          <Button
+            size="xs"
+            variant="danger"
+            loading={cancel.isPending}
+            title="Stop this job"
+            onClick={(e) => { e.stopPropagation(); if (jobId) cancel.mutate(jobId); }}
+          >
+            <Square className="size-2.5 fill-current" /> Stop
+          </Button>
+        </div>
+      ) : (
+        <div
+          className="grid grid-cols-4 gap-1 border-t border-white/[0.06] bg-white/[0.015] p-1.5"
+          title={gateReason}
+        >
+          <PublishButton
+            label="All" icon={<Rocket className="size-3" />} primary
+            disabled={!canPublish}
+            onClick={() => run("publish-all")}
+            tip={gateReason || "Publish to every configured target"}
+          />
+          <PublishButton
+            label="YT" icon={<MonitorPlay className="size-3" />}
+            status={st.upload} disabled={!canPublish}
+            onClick={() => run("upload")}
+            tip={gateReason || statusTip("YouTube", st.upload)}
+          />
+          <PublishButton
+            label="FB" icon={<ThumbsUp className="size-3" />}
+            status={st.facebook} disabled={!canPublish}
+            onClick={() => run("facebook")}
+            tip={gateReason || statusTip("Facebook", st.facebook)}
+          />
+          <PublishButton
+            label="IG" icon={<Camera className="size-3" />}
+            status={st.instagram} disabled={!canPublish}
+            onClick={() => run("instagram")}
+            tip={gateReason || statusTip("Instagram", st.instagram)}
+          />
+        </div>
+      )}
     </Card>
   );
 }
