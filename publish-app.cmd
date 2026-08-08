@@ -2,6 +2,19 @@
 REM Build the React frontend, then package the double-clickable YtPipeline app into app\.
 cd /d "%~dp0"
 
+REM A running app\YtPipeline.exe holds an exclusive lock on itself, so publishing over it dies
+REM with "GenerateBundle task failed / Access to the path ... is denied". Close it first rather
+REM than making that the user's problem.
+echo === Closing YtPipeline if it is running ===
+taskkill /IM YtPipeline.exe /F >nul 2>&1
+if not errorlevel 1 (
+  echo   closed a running instance
+  REM Windows releases the file handle a moment after the process dies.
+  timeout /t 2 /nobreak >nul
+) else (
+  echo   not running
+)
+
 echo === Building frontend (Vite) ===
 call npm --prefix web install
 if errorlevel 1 goto :error
@@ -25,6 +38,8 @@ exit /b 0
 
 :error
 echo.
-echo BUILD FAILED — see output above.
+REM Plain ASCII only: cmd reads this file in the OEM codepage, so an em-dash here prints
+REM as mojibake ("BUILD FAILED ΓÇö ...").
+echo BUILD FAILED - see output above.
 pause
 exit /b 1
