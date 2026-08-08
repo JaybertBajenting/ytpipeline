@@ -1,12 +1,9 @@
 import { useState } from "react";
 import { Clock, Image as ImageIcon, Sparkles } from "lucide-react";
+import { lengthBudget } from "@/lib/api";
 import { useChannels, useGenerateScript } from "@/lib/hooks";
 import { useUi } from "@/lib/store";
 import { Button, Callout, Input, Modal, Select, Switch } from "./ui";
-
-/** Words per minute the script stage assumes — mirrors ClaudeCliScriptGenerator. */
-const WPM_LOW = 130;
-const WPM_HIGH = 150;
 
 /**
  * "New video" dialog. Reachable from the sidebar on every view, so starting a run never
@@ -24,12 +21,13 @@ export function Composer() {
   const channelId = channel || channels?.[0]?.id || "";
   const selected = channels?.find((c) => c.id === channelId);
 
-  // Show what the channel's length setting actually buys: word range and image count.
-  // This is the number that drives image spend, so it belongs in front of the user before
-  // they press Generate rather than in a log afterwards.
-  const minutes = selected?.videoLengthTargetMinutes ?? 5;
-  const words = `${minutes * WPM_LOW}–${minutes * WPM_HIGH}`;
-  const beats = Math.round((minutes * WPM_LOW) / 6);
+  // Show what the channel's length range actually buys: word count and image count. Image spend
+  // is the expensive part, so it belongs in front of the user before they press Generate rather
+  // than in a log afterwards.
+  const budget = lengthBudget(
+    selected?.videoLengthMinMinutes ?? 5,
+    selected?.videoLengthMaxMinutes ?? 5,
+  );
 
   function submit() {
     if (!topic.trim() || !channelId) return;
@@ -86,14 +84,16 @@ export function Composer() {
             <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/35">
               <Clock className="size-3" /> Target length
             </div>
-            <div className="mt-1 text-sm font-semibold text-white">{minutes} min</div>
-            <div className="text-[11px] text-white/30">{words} words</div>
+            <div className="mt-1 text-sm font-semibold text-white">{budget.minutesLabel}</div>
+            <div className="text-[11px] text-white/30">{budget.wordsLabel} words</div>
           </div>
           <div className="rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2.5">
             <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/35">
               <ImageIcon className="size-3" /> Images
             </div>
-            <div className="mt-1 text-sm font-semibold text-white">~{beats}</div>
+            <div className="mt-1 text-sm font-semibold text-white">
+              {budget.isRange ? `${budget.beats.min}-${budget.beats.max}` : `~${budget.beats.min}`}
+            </div>
             <div className="text-[11px] text-white/30">one per beat</div>
           </div>
         </div>
@@ -105,10 +105,10 @@ export function Composer() {
           desc="Script → voice → images → video, approving both checkpoints automatically. Stops before upload."
         />
 
-        {auto && beats > 150 && (
+        {auto && budget.beats.max > 150 && (
           <Callout tone="warn" title="Long run ahead">
-            ~{beats} images at this length. Image generation is the slow, quota-consuming stage —
-            consider lowering this channel's target minutes first.
+            Up to {budget.beats.max} images at this length. Image generation is the slow,
+            quota-consuming stage — consider lowering this channel's length range first.
           </Callout>
         )}
 

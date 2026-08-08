@@ -1,5 +1,6 @@
 import {
-  ChevronsLeft, Film, LayoutDashboard, Layers, Plus, Settings as SettingsIcon, Tv,
+  CalendarDays, ChevronsLeft, Film, LayoutDashboard, Layers, Plus,
+  Settings as SettingsIcon, Tv,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useRuns } from "@/lib/hooks";
@@ -10,6 +11,7 @@ import { cn } from "@/lib/utils";
 const NAV: { id: View; label: string; icon: ReactNode; hint: string }[] = [
   { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard className="size-4" />, hint: "Overview" },
   { id: "videos",    label: "Videos",    icon: <Film className="size-4" />,            hint: "All runs" },
+  { id: "calendar",  label: "Calendar",  icon: <CalendarDays className="size-4" />,    hint: "Publish plan" },
   { id: "channels",  label: "Channels",  icon: <Tv className="size-4" />,              hint: "Per-channel setup" },
   { id: "settings",  label: "Settings",  icon: <SettingsIcon className="size-4" />,    hint: "Providers & keys" },
 ];

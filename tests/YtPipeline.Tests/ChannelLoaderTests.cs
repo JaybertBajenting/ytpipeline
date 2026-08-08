@@ -28,6 +28,91 @@ public sealed class ChannelLoaderTests : IDisposable
     }
 
     [Fact]
+    public void Load_migrates_legacy_single_length_into_the_range()
+    {
+        // A channel file written before the min/max range existed must keep behaving the same.
+        var channel = new ChannelLoader(_dir).Load("nullpointer");
+
+        channel.VideoLengthMinMinutes.Should().Be(5);
+        channel.VideoLengthMaxMinutes.Should().Be(5);
+    }
+
+    [Fact]
+    public void Save_keeps_the_range_and_resyncs_the_legacy_field()
+    {
+        var loader = new ChannelLoader(_dir);
+        var channel = loader.Load("nullpointer");
+        channel.VideoLengthMinMinutes = 3;
+        channel.VideoLengthMaxMinutes = 5;
+
+        var saved = loader.Save("nullpointer", channel);
+
+        saved.VideoLengthMinMinutes.Should().Be(3);
+        saved.VideoLengthMaxMinutes.Should().Be(5);
+        saved.VideoLengthTargetMinutes.Should().Be(3, "the legacy field mirrors the lower bound");
+    }
+
+    [Fact]
+    public void Save_widens_an_inverted_range_rather_than_producing_max_below_min()
+    {
+        var loader = new ChannelLoader(_dir);
+        var channel = loader.Load("nullpointer");
+        channel.VideoLengthMinMinutes = 8;
+        channel.VideoLengthMaxMinutes = 2;   // inverted
+
+        var saved = loader.Save("nullpointer", channel);
+
+        saved.VideoLengthMinMinutes.Should().Be(8);
+        saved.VideoLengthMaxMinutes.Should().Be(8);
+    }
+
+    [Fact]
+    public void Save_clamps_a_length_above_the_ceiling()
+    {
+        var loader = new ChannelLoader(_dir);
+        var channel = loader.Load("nullpointer");
+        channel.VideoLengthMinMinutes = 4;
+        channel.VideoLengthMaxMinutes = 999;   // would queue thousands of images
+
+        var saved = loader.Save("nullpointer", channel);
+
+        saved.VideoLengthMinMinutes.Should().Be(4);
+        saved.VideoLengthMaxMinutes.Should().Be(30, "30 minutes is the ceiling");
+    }
+
+    [Fact]
+    public void Save_treats_a_one_sided_range_as_that_single_length()
+    {
+        // Only reachable from a hand-written API call — the UI always sends both ends. The rule
+        // is "the missing end equals the given one", so a lone max of 999 means "as long as
+        // allowed", not "anywhere from 1 to 30".
+        var loader = new ChannelLoader(_dir);
+        var channel = loader.Load("nullpointer");
+        channel.VideoLengthMinMinutes = 0;
+        channel.VideoLengthMaxMinutes = 999;
+
+        var saved = loader.Save("nullpointer", channel);
+
+        saved.VideoLengthMinMinutes.Should().Be(30);
+        saved.VideoLengthMaxMinutes.Should().Be(30);
+    }
+
+    [Fact]
+    public void Save_rejects_a_zero_length_that_would_ask_for_an_empty_script()
+    {
+        var loader = new ChannelLoader(_dir);
+        var channel = loader.Load("nullpointer");
+        channel.VideoLengthMinMinutes = 0;
+        channel.VideoLengthMaxMinutes = 0;
+
+        var saved = loader.Save("nullpointer", channel);
+
+        // Both absent falls back to the legacy field (5), not to zero.
+        saved.VideoLengthMinMinutes.Should().Be(5);
+        saved.VideoLengthMaxMinutes.Should().Be(5);
+    }
+
+    [Fact]
     public void Load_unknown_channel_throws_with_known_list()
     {
         var loader = new ChannelLoader(_dir);

@@ -1,5 +1,5 @@
 import { ArrowRight, CheckCircle2, Film, Image as ImageIcon, Loader2, Plus, Tv, Upload } from "lucide-react";
-import { stagesDone } from "@/lib/api";
+import { lengthBudget, stagesDone } from "@/lib/api";
 import { useChannels, useRuns, useSettings } from "@/lib/hooks";
 import { useUi } from "@/lib/store";
 import { VideoCard } from "@/components/VideoCard";
@@ -118,7 +118,7 @@ export function Dashboard() {
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-xs font-medium text-white/80">{c.name}</span>
                         <span className="block truncate text-[10px] text-white/30">
-                          {c.videoLengthTargetMinutes} min
+                          {lengthBudget(c.videoLengthMinMinutes, c.videoLengthMaxMinutes).minutesLabel}
                           {c.voice.voiceName ? ` · ${c.voice.voiceName}` : ""}
                           {c.music ? "" : " · no music"}
                         </span>

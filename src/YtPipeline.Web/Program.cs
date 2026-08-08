@@ -250,6 +250,8 @@ static object Describe(string id, YtPipeline.Core.Models.Channel c) => new
     c.Audience,
     c.Tone,
     c.VideoLengthTargetMinutes,
+    c.VideoLengthMinMinutes,
+    c.VideoLengthMaxMinutes,
     c.ScriptStructure,
     c.VisualStyle,
     c.VoiceNotes,
@@ -335,10 +337,24 @@ app.MapPost("/api/runs/{id}/stage/{stage}", (string id, string stage, string? pr
             var result = await pipeline.PublishAsync(run, stage.ToLowerInvariant(), ct);
             if (result.Skipped) Log.Warning("{Platform} skipped — {Reason}", result.Platform, result.SkipReason);
         },
+        // Everything configured, in one job, so the card's "Upload all" is a single log stream.
+        "publish-all" => ct => pipeline.PublishEverywhereAsync(run, privacy ?? "private", ct),
         _ => throw new ArgumentException($"Unknown stage '{stage}'."),
     };
     var job = jobs.Start(run.RunId, stage, work);
     return J(new { jobId = job.Id });
+});
+
+// --- Planned publish date (Calendar) ----------------------------------------
+// A plan, not a trigger: nothing publishes on a schedule, so this only moves the card on the
+// Calendar. Send scheduledUtc: null to clear it.
+app.MapPut("/api/runs/{id}/schedule", (string id, ScheduleRequest req) =>
+{
+    var run = pipeline.Runs.Resolve(id);
+    var saved = pipeline.Runs.UpdateManifest(run, m => m.Publish.ScheduledUtc = req.ScheduledUtc);
+    Log.Information("Run '{Id}' scheduled for {When}.",
+        id, saved.Publish.ScheduledUtc?.ToString("u") ?? "(cleared)");
+    return J(saved);
 });
 
 // --- Approve a checkpoint ---------------------------------------------------
@@ -431,3 +447,4 @@ app.Run();
 internal sealed record CreateScriptRequest(string Channel, string Topic, bool Auto = false);
 internal sealed record ApproveRequest(string Stage);
 internal sealed record CreateChannelRequest(string Id, YtPipeline.Core.Models.Channel? Channel);
+internal sealed record ScheduleRequest(DateTime? ScheduledUtc);

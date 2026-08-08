@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 /** Top-level destinations in the sidebar. */
-export type View = "dashboard" | "videos" | "channels" | "settings";
+export type View = "dashboard" | "videos" | "calendar" | "channels" | "settings";
 
 interface UiState {
   /** Which sidebar destination is showing. */

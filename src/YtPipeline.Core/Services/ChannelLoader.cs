@@ -19,6 +19,7 @@ public sealed class ChannelLoader
 
         var channel = Json.ReadFile<Channel>(path);
         channel.Id = channelId;
+        MigrateLength(channel);
 
         // Image rule: per-channel "<id>.image.md" if present, else the shared "_default.image.md".
         var rulePath = Path.Combine(_channelsDir, channelId + ".image.md");
@@ -98,12 +99,40 @@ public sealed class ChannelLoader
         && id.All(c => (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-')
         && id[0] != '-' && id[^1] != '-';
 
+    /// <summary>
+    /// Fills the min/max range from the legacy single value when a channel file predates it,
+    /// so an untouched older channel keeps behaving exactly as it did.
+    /// </summary>
+    private static void MigrateLength(Channel c)
+    {
+        if (c.VideoLengthMinMinutes <= 0 && c.VideoLengthMaxMinutes <= 0)
+        {
+            var legacy = c.VideoLengthTargetMinutes > 0 ? c.VideoLengthTargetMinutes : 5;
+            c.VideoLengthMinMinutes = legacy;
+            c.VideoLengthMaxMinutes = legacy;
+        }
+        // Only one side present — treat it as both ends of a zero-width range.
+        else if (c.VideoLengthMinMinutes <= 0) c.VideoLengthMinMinutes = c.VideoLengthMaxMinutes;
+        else if (c.VideoLengthMaxMinutes <= 0) c.VideoLengthMaxMinutes = c.VideoLengthMinMinutes;
+    }
+
     /// <summary>Clamps values a bad edit could otherwise push somewhere expensive or broken.</summary>
     private static void Normalize(Channel c)
     {
+        MigrateLength(c);
+
         // 1-30 min: a 0 would ask for a zero-word script, and a huge value would queue
         // thousands of image generations.
-        c.VideoLengthTargetMinutes = Math.Clamp(c.VideoLengthTargetMinutes, 1, 30);
+        c.VideoLengthMinMinutes = Math.Clamp(c.VideoLengthMinMinutes, 1, 30);
+        c.VideoLengthMaxMinutes = Math.Clamp(c.VideoLengthMaxMinutes, 1, 30);
+
+        // An inverted range would produce a word budget with max < min, which the prompt can't
+        // satisfy. Widening the max is the harmless direction to fix it.
+        if (c.VideoLengthMaxMinutes < c.VideoLengthMinMinutes)
+            c.VideoLengthMaxMinutes = c.VideoLengthMinMinutes;
+
+        // Keep the legacy field meaningful for anything still reading it.
+        c.VideoLengthTargetMinutes = c.VideoLengthMinMinutes;
 
         c.Voice ??= new ChannelVoice();
         if (c.Voice.Stability is { } st) c.Voice.Stability = Math.Clamp(st, 0.0, 1.0);

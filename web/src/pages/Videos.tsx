@@ -21,10 +21,6 @@ export function Videos() {
   const [filter, setFilter] = useState<Filter>("all");
   const [deleting, setDeleting] = useState<Manifest | null>(null);
 
-  // A selected run takes over the whole view — the grid is the "browse" mode and the
-  // detail is the "work on it" mode, and mixing both in one screen made neither readable.
-  if (selectedRunId) return <RunDetail runId={selectedRunId} />;
-
   const shown = useMemo(() => {
     let list = runs ?? [];
     if (channel !== "all") list = list.filter((m) => m.channel === channel);
@@ -41,6 +37,13 @@ export function Videos() {
     // Newest first — createdUtc is the run id's timestamp, so this matches folder order.
     return [...list].sort((a, b) => +new Date(b.createdUtc) - +new Date(a.createdUtc));
   }, [runs, channel, filter, q]);
+
+  // A selected run takes over the whole view — the grid is the "browse" mode and the detail is
+  // the "work on it" mode, and mixing both in one screen made neither readable.
+  //
+  // MUST stay below every hook above. Returning before a hook changes the hook count between
+  // renders, which React rejects outright (error #300) and blanks the whole page.
+  if (selectedRunId) return <RunDetail runId={selectedRunId} />;
 
   return (
     <>

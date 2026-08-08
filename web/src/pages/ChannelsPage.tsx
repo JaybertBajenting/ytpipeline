@@ -4,7 +4,8 @@ import {
   ThumbsUp, Trash2, Tv, Volume2, X,
 } from "lucide-react";
 import {
-  newChannelTemplate, type Channel, type ChannelPublishUpdate, type ChannelPublishView,
+  lengthBudget, newChannelTemplate, WPM_HIGH, WPM_LOW,
+  type Channel, type ChannelPublishUpdate, type ChannelPublishView,
 } from "@/lib/api";
 import {
   useChannelPublish, useChannels, useCreateChannel, useDeleteChannel, useRuns,
@@ -16,9 +17,6 @@ import {
   inputCls,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
-
-const WPM_LOW = 130;
-const WPM_HIGH = 150;
 
 /** channels/<id>.json — the id is a filename, so it has to be filename-safe. */
 function slugify(name: string) {
@@ -96,7 +94,7 @@ function ChannelCard({
 }: { c: Channel; index: number; onEdit: () => void; onDelete: () => void }) {
   const { data: runs } = useRuns();
   const count = (runs ?? []).filter((m) => m.channel === c.id).length;
-  const beats = Math.round((c.videoLengthTargetMinutes * WPM_LOW) / 6);
+  const budget = lengthBudget(c.videoLengthMinMinutes, c.videoLengthMaxMinutes);
 
   return (
     <Card
@@ -126,8 +124,12 @@ function ChannelCard({
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <Metric icon={<Clock className="size-3" />} label="Length" value={`${c.videoLengthTargetMinutes} min`} />
-        <Metric icon={<ImageIcon className="size-3" />} label="Images" value={`~${beats}`} />
+        <Metric icon={<Clock className="size-3" />} label="Length" value={budget.minutesLabel} />
+        <Metric
+          icon={<ImageIcon className="size-3" />}
+          label="Images"
+          value={budget.isRange ? `${budget.beats.min}-${budget.beats.max}` : `~${budget.beats.min}`}
+        />
       </div>
 
       <div className="mt-3 flex flex-wrap gap-1.5 border-t border-white/[0.05] pt-3">
@@ -167,10 +169,11 @@ function NewChannelModal({
   const [name, setName] = useState("");
   const [id, setId] = useState("");
   const [idEdited, setIdEdited] = useState(false);
-  const [minutes, setMinutes] = useState(5);
+  const [lo, setLo] = useState(3);
+  const [hi, setHi] = useState(5);
 
   useEffect(() => {
-    if (open) { setName(""); setId(""); setIdEdited(false); setMinutes(5); }
+    if (open) { setName(""); setId(""); setIdEdited(false); setLo(3); setHi(5); }
   }, [open]);
 
   // The id follows the name until the user takes it over — most people never touch it.
@@ -179,10 +182,14 @@ function NewChannelModal({
   const valid = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])$/.test(effectiveId);
   const ready = !!name.trim() && valid && !taken;
 
+  const budget = lengthBudget(lo, hi);
+
   async function submit() {
     if (!ready) return;
     const tpl = newChannelTemplate(name.trim());
-    tpl.videoLengthTargetMinutes = minutes;
+    tpl.videoLengthMinMinutes = budget.lo;
+    tpl.videoLengthMaxMinutes = budget.hi;
+    tpl.videoLengthTargetMinutes = budget.lo;
     await create.mutateAsync({ id: effectiveId, channel: tpl });
     onCreated(effectiveId);
   }
@@ -237,14 +244,21 @@ function NewChannelModal({
           </Callout>
         )}
 
-        <Slider
-          label="Target video length"
-          min={1} max={20} step={1}
-          value={minutes}
-          onChange={setMinutes}
-          format={(v) => `${v} min`}
-          hint={`≈ ${minutes * WPM_LOW}–${minutes * WPM_HIGH} words and ~${Math.round((minutes * WPM_LOW) / 6)} images per video.`}
-        />
+        <div className="space-y-3">
+          <Slider
+            label="Shortest video" min={1} max={20} step={1}
+            value={lo}
+            onChange={(v) => { setLo(v); if (v > hi) setHi(v); }}
+            format={(v) => `${v} min`}
+          />
+          <Slider
+            label="Longest video" min={1} max={20} step={1}
+            value={hi}
+            onChange={(v) => { setHi(v); if (v < lo) setLo(v); }}
+            format={(v) => `${v} min`}
+            hint={`≈ ${budget.wordsLabel} words and ${budget.isRange ? `${budget.beats.min}–${budget.beats.max}` : `~${budget.beats.min}`} images per video.`}
+          />
+        </div>
 
         <Callout tone="info">
           The new channel falls back to the shared <code>_default.image.md</code> rule until you
@@ -339,9 +353,17 @@ function ChannelEditor({ channel, onBack }: { channel: Channel; onBack: () => vo
     setPub((p) => (p ? { ...p, ...patch } : p));
 
   const overriding = draft.voice.stability !== null || draft.voice.similarityBoost !== null;
-  const minutes = draft.videoLengthTargetMinutes;
-  const words = `${minutes * WPM_LOW}–${minutes * WPM_HIGH}`;
-  const beats = Math.round((minutes * WPM_LOW) / 6);
+  const budget = lengthBudget(draft.videoLengthMinMinutes, draft.videoLengthMaxMinutes);
+
+  /** Keeps the pair ordered: dragging one handle past the other pushes the other along. */
+  function setLength(which: "min" | "max", v: number) {
+    setDraft((d) => {
+      const lo = which === "min" ? v : Math.min(d.videoLengthMinMinutes, v);
+      const hi = which === "max" ? v : Math.max(d.videoLengthMaxMinutes, v);
+      // videoLengthTargetMinutes is legacy; the server re-syncs it to the lower bound on save.
+      return { ...d, videoLengthMinMinutes: lo, videoLengthMaxMinutes: hi, videoLengthTargetMinutes: lo };
+    });
+  }
 
   function reset() {
     setDraft(channel);
@@ -406,20 +428,37 @@ function ChannelEditor({ channel, onBack }: { channel: Channel; onBack: () => vo
           />
           <div className="space-y-4 p-4">
             <Slider
-              label="Target length" min={1} max={20} step={1}
-              value={minutes}
-              onChange={(v) => set("videoLengthTargetMinutes", v)}
+              label="Shortest" min={1} max={20} step={1}
+              value={budget.lo}
+              onChange={(v) => setLength("min", v)}
               format={(v) => `${v} min`}
             />
+            <Slider
+              label="Longest" min={1} max={20} step={1}
+              value={budget.hi}
+              onChange={(v) => setLength("max", v)}
+              format={(v) => `${v} min`}
+              hint={budget.isRange
+                ? "The script may land anywhere in this range."
+                : "Same as the shortest — asks for one specific length."}
+            />
+
             <div className="grid grid-cols-3 gap-2">
-              <Metric icon={<Clock className="size-3" />} label="Minutes" value={String(minutes)} />
-              <Metric icon={<Volume2 className="size-3" />} label="Words" value={words} />
-              <Metric icon={<ImageIcon className="size-3" />} label="Images" value={`~${beats}`} />
+              <Metric icon={<Clock className="size-3" />} label="Runtime" value={budget.minutesLabel} />
+              <Metric icon={<Volume2 className="size-3" />} label="Words" value={budget.wordsLabel} />
+              <Metric
+                icon={<ImageIcon className="size-3" />}
+                label="Images"
+                value={budget.isRange ? `${budget.beats.min}-${budget.beats.max}` : `~${budget.beats.min}`}
+              />
             </div>
-            <Callout tone={beats > 150 ? "warn" : "info"}>
-              At {WPM_LOW}–{WPM_HIGH} words/min this asks for <strong>{words} words</strong>, split
-              into 4–9-word beats — roughly <strong>{beats} images</strong>, one per beat.
-              {beats > 150 && " That's a long, quota-heavy image stage."}
+
+            <Callout tone={budget.beats.max > 150 ? "warn" : "info"}>
+              At {WPM_LOW}–{WPM_HIGH} words/min this asks for <strong>{budget.wordsLabel} words</strong>,
+              split into 4–9-word beats — <strong>
+              {budget.isRange ? `${budget.beats.min}–${budget.beats.max}` : `about ${budget.beats.min}`} images
+              </strong>, one per beat.
+              {budget.beats.max > 150 && " The top of that range is a long, quota-heavy image stage."}
             </Callout>
             <Switch
               checked={draft.music}

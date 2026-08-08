@@ -40,26 +40,44 @@ public sealed class ClaudeCliScriptGenerator(
     /// <summary>
     /// Word budget for one script, derived from the channel's <c>videoLengthTargetMinutes</c>.
     /// </summary>
-    /// <param name="Minutes">The channel's requested runtime.</param>
-    /// <param name="Min">Lower bound of the target range (<c>Minutes × 130</c>).</param>
-    /// <param name="Max">Upper bound of the target range (<c>Minutes × 150</c>).</param>
+    /// <param name="MinMinutes">Shortest acceptable runtime.</param>
+    /// <param name="MaxMinutes">Longest acceptable runtime.</param>
+    /// <param name="Min">Lower bound of the word range (<c>MinMinutes × 130</c>).</param>
+    /// <param name="Max">Upper bound of the word range (<c>MaxMinutes × 150</c>).</param>
     /// <param name="Floor">
     /// Acceptance floor that triggers the expand retry — 8% under <paramref name="Min"/> so a
     /// borderline-passing script isn't regenerated for the sake of a few words.
     /// </param>
-    private readonly record struct WordTarget(int Minutes, int Min, int Max, int Floor)
+    private readonly record struct WordTarget(
+        int MinMinutes, int MaxMinutes, int Min, int Max, int Floor)
     {
-        /// <summary>Roughly how many beats this budget implies at 4–9 words per beat.</summary>
+        /// <summary>True when the channel asked for a spread rather than one length.</summary>
+        public bool IsRange => MaxMinutes > MinMinutes;
+
+        /// <summary>Human-readable runtime, e.g. "3-5 minutes" or "4 minutes".</summary>
+        public string MinutesLabel => IsRange ? $"{MinMinutes}-{MaxMinutes} minutes" : $"{MinMinutes} minutes";
+
+        /// <summary>Roughly how many beats the budget implies at 4–9 words per beat.</summary>
         public int ApproxBeats => Min / 6;
+
+        /// <summary>Upper-bound beat estimate — what the image stage would actually have to make.</summary>
+        public int ApproxBeatsMax => Max / 6;
 
         public static WordTarget For(Channel channel)
         {
-            // Guard against a missing or nonsensical channel value: a 0 here would ask Claude
-            // for a zero-word script, and an absurdly high one would burn a whole day of images.
-            var minutes = Math.Clamp(channel.VideoLengthTargetMinutes, 1, 30);
-            var min = minutes * WordsPerMinuteLow;
-            var max = minutes * WordsPerMinuteHigh;
-            return new WordTarget(minutes, min, max, (int)(min * 0.92));
+            // Guard against missing or nonsensical channel values: a 0 would ask Claude for a
+            // zero-word script, and an absurdly high one would burn a whole day of images.
+            var lo = Math.Clamp(
+                channel.VideoLengthMinMinutes > 0
+                    ? channel.VideoLengthMinMinutes
+                    : channel.VideoLengthTargetMinutes, 1, 30);
+            var hi = Math.Clamp(
+                channel.VideoLengthMaxMinutes > 0 ? channel.VideoLengthMaxMinutes : lo, 1, 30);
+            if (hi < lo) hi = lo;
+
+            var min = lo * WordsPerMinuteLow;
+            var max = hi * WordsPerMinuteHigh;
+            return new WordTarget(lo, hi, min, max, (int)(min * 0.92));
         }
     }
 
@@ -67,8 +85,9 @@ public sealed class ClaudeCliScriptGenerator(
     {
         var target = WordTarget.For(channel);
         logger.LogInformation(
-            "Script target for '{Channel}': {Minutes} min → {Min}–{Max} words (~{Beats} beats).",
-            channel.Id, target.Minutes, target.Min, target.Max, target.ApproxBeats);
+            "Script target for '{Channel}': {Minutes} → {Min}–{Max} words (~{Beats}-{BeatsMax} beats).",
+            channel.Id, target.MinutesLabel, target.Min, target.Max,
+            target.ApproxBeats, target.ApproxBeatsMax);
 
         var prompt = BuildPrompt(channel, topic);
         var args = new List<string>(options.Args) { prompt };
@@ -165,7 +184,7 @@ public sealed class ClaudeCliScriptGenerator(
         // ── LENGTH: stated first so Claude reads it before anything else ──────
         sb.AppendLine("=== WORD COUNT — READ THIS FIRST ===");
         sb.AppendLine($"The narration MUST be {target.Min}–{target.Max} words. This is a HARD requirement, not a guideline.");
-        sb.AppendLine($"At a typical voiceover pace of {WordsPerMinuteLow}–{WordsPerMinuteHigh} words per minute, that is a video of about {target.Minutes} minute(s).");
+        sb.AppendLine($"At a typical voiceover pace of {WordsPerMinuteLow}–{WordsPerMinuteHigh} words per minute, that is a video of about {target.MinutesLabel}.");
         sb.AppendLine($"A script under {target.Floor} words will be REJECTED and you will be asked to expand it anyway — so write the full length now.");
         sb.AppendLine($"Do NOT overshoot either: staying under {target.Max} words matters just as much, because every beat becomes a generated image.");
         sb.AppendLine();
@@ -176,7 +195,7 @@ public sealed class ClaudeCliScriptGenerator(
         sb.AppendLine();
         sb.AppendLine("Requirements:");
         sb.AppendLine($"- LENGTH (MANDATORY — scripts under {target.Floor} words will be rejected): the narration must total {target.Min}–{target.Max} spoken words. Do NOT write a short script. Expand every section with detail, examples, context, and explanation until you hit the word count.");
-        sb.AppendLine($"- PACING (CRITICAL — this must be a FAST-paced edit): break the narration into VERY short beats. Each beat should be only about 1.5 to 2.5 seconds of speech — roughly 4 to 9 spoken words, i.e. a single short phrase, NOT a whole sentence. NEVER let a beat exceed ~10 words. Split long sentences into several beats at natural pause points (commas, conjunctions, clauses). There is exactly one image per beat, so the more beats you make, the more the visuals change — aim for a brand-new visual every couple of seconds. A {target.Min}–{target.Max} word script should therefore have roughly {target.ApproxBeats} beats.");
+        sb.AppendLine($"- PACING (CRITICAL — this must be a FAST-paced edit): break the narration into VERY short beats. Each beat should be only about 1.5 to 2.5 seconds of speech — roughly 4 to 9 spoken words, i.e. a single short phrase, NOT a whole sentence. NEVER let a beat exceed ~10 words. Split long sentences into several beats at natural pause points (commas, conjunctions, clauses). There is exactly one image per beat, so the more beats you make, the more the visuals change — aim for a brand-new visual every couple of seconds. A {target.Min}–{target.Max} word script should therefore have roughly {target.ApproxBeats}-{target.ApproxBeatsMax} beats.");
         sb.AppendLine("- The beats' narration, read in order start to finish, must read as the complete, natural voiceover (they are concatenated and spoken as-is).");
         sb.AppendLine("- Open with a hook, build the topic clearly in the middle, and end with a short wrap-up.");
         sb.AppendLine("- Write a strong, clickable title (<= 100 chars) and a useful YouTube description.");

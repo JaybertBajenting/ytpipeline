@@ -1,7 +1,11 @@
 import { useState, type ReactNode } from "react";
-import { ArrowLeft, Camera, Clock, Download, ExternalLink, ThumbsUp, Trash2 } from "lucide-react";
+import {
+  ArrowLeft, CalendarDays, Camera, Clock, Download, ExternalLink, ThumbsUp, Trash2,
+} from "lucide-react";
 import { api, type StageStatus } from "@/lib/api";
-import { useApprove, useCancelJob, useJob, useRun, useRunStage } from "@/lib/hooks";
+import {
+  useApprove, useCancelJob, useJob, useRun, useRunStage, useScheduleRun,
+} from "@/lib/hooks";
 import { useUi } from "@/lib/store";
 import { Badge, Button, SectionLabel, Spinner, Tag, selectCls } from "./ui";
 import { StageCard } from "./StageCard";
@@ -17,6 +21,7 @@ export function RunDetail({ runId }: { runId: string }) {
   const stage = useRunStage(runId);
   const approve = useApprove(runId);
   const cancel = useCancelJob();
+  const schedule = useScheduleRun();
   const [privacy, setPrivacy] = useState("private");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -88,6 +93,34 @@ export function RunDetail({ runId }: { runId: string }) {
             <code className="rounded bg-white/[0.05] px-1.5 py-0.5 font-mono text-[10px] text-white/30">
               {m.runId}
             </code>
+          </div>
+
+          {/* Planned publish date — drives the Calendar, triggers nothing on its own. */}
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            <span className="flex items-center gap-1 text-[11px] text-white/35">
+              <CalendarDays className="size-3" /> Planned date
+            </span>
+            <input
+              type="date"
+              className="rounded-md border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-[11px] text-white/80 outline-none focus:border-amber-500/50 [color-scheme:dark]"
+              value={m.publish.scheduledUtc
+                ? new Date(m.publish.scheduledUtc).toLocaleDateString("en-CA")
+                : ""}
+              onChange={(e) => schedule.mutate({
+                runId,
+                // Noon local keeps the calendar day stable through the UTC round-trip.
+                scheduledUtc: e.target.value
+                  ? new Date(`${e.target.value}T12:00:00`).toISOString()
+                  : null,
+              })}
+            />
+            {m.publish.scheduledUtc && (
+              <Button size="xs" variant="ghost"
+                onClick={() => schedule.mutate({ runId, scheduledUtc: null })}>
+                Clear
+              </Button>
+            )}
+            <span className="text-[10px] text-white/20">Plan only — nothing uploads on a timer.</span>
           </div>
         </div>
         {busy && <Badge tone="run"><Spinner /> {activeStage ?? job?.stage}…</Badge>}

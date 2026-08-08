@@ -193,6 +193,57 @@ public sealed class Pipeline(
         return result;
     }
 
+    /// <summary>
+    /// Publishes everywhere that's configured, in one job: YouTube first, then each social
+    /// platform. Deliberately tolerant — an unconfigured platform is skipped and a failing one is
+    /// logged and stepped over, so one dead token can't stop the others from going out. Throws
+    /// only if every target failed outright.
+    /// </summary>
+    public async Task PublishEverywhereAsync(Run run, string privacy, CancellationToken ct)
+    {
+        RequireApproved(run, "video");
+        var failures = new List<string>();
+        var attempted = 0;
+
+        var manifest = runs.LoadManifest(run);
+        if (!manifest.Stages.Upload.Done)
+        {
+            attempted++;
+            try { await UploadAsync(run, privacy, ct); }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "YouTube upload failed — continuing with the other targets.");
+                failures.Add($"youtube: {ex.Message}");
+            }
+        }
+        else logger.LogInformation("YouTube: already uploaded, skipping.");
+
+        foreach (var p in publishers)
+        {
+            attempted++;
+            try
+            {
+                var r = await PublishAsync(run, p.Platform, ct);
+                if (r.Skipped) logger.LogInformation("{Platform}: {Reason}", p.Platform, r.SkipReason);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "{Platform} failed — continuing.", p.Platform);
+                failures.Add($"{p.Platform}: {ex.Message}");
+            }
+        }
+
+        if (attempted > 0 && failures.Count == attempted)
+            throw new InvalidOperationException(
+                "Every publish target failed:\n  " + string.Join("\n  ", failures));
+
+        if (failures.Count > 0)
+            logger.LogWarning("Finished with {Count} failed target(s): {Failures}",
+                failures.Count, string.Join("; ", failures));
+    }
+
     /// <summary>Manifest slot for a platform's status.</summary>
     private static StageStatus Slot(Manifest m, string platform) =>
         platform.ToLowerInvariant() switch

@@ -45,6 +45,18 @@ export function useSaveChannelPublish(id: string) {
   });
 }
 
+export function useScheduleRun() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ runId, scheduledUtc }: { runId: string; scheduledUtc: string | null }) =>
+      api.scheduleRun(runId, scheduledUtc),
+    onSuccess: (_m, { runId }) => {
+      qc.invalidateQueries({ queryKey: ["run", runId] });
+      qc.invalidateQueries({ queryKey: ["runs"] });
+    },
+  });
+}
+
 export function useDeleteRun() {
   const qc = useQueryClient();
   const select = useUi((s) => s.select);

@@ -88,4 +88,10 @@ public sealed class PublishInfo
     public string Description { get; set; } = "";
     public List<string> Tags { get; set; } = new();
     public bool HasThumbnail { get; set; }
+
+    /// <summary>
+    /// When this video is intended to go out, shown on the Calendar. Purely a plan — nothing
+    /// publishes on a timer, so a date passing doesn't trigger anything. Null = unscheduled.
+    /// </summary>
+    public DateTime? ScheduledUtc { get; set; }
 }

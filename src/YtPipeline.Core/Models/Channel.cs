@@ -17,7 +17,21 @@ public sealed class Channel
     public string Persona { get; set; } = "";
     public string Audience { get; set; } = "";
     public string Tone { get; set; } = "";
+    /// <summary>
+    /// Legacy single-value length. Superseded by <see cref="VideoLengthMinMinutes"/> /
+    /// <see cref="VideoLengthMaxMinutes"/>; kept so older channel files still load, and
+    /// re-synced to the range's lower bound on save.
+    /// </summary>
     public int VideoLengthTargetMinutes { get; set; } = 5;
+
+    /// <summary>Shortest acceptable runtime, in minutes.</summary>
+    public int VideoLengthMinMinutes { get; set; }
+
+    /// <summary>
+    /// Longest acceptable runtime, in minutes. Equal to the minimum means "about this long";
+    /// a spread (e.g. 3-5) gives the script room without letting the image count run away.
+    /// </summary>
+    public int VideoLengthMaxMinutes { get; set; }
     public List<string> ScriptStructure { get; set; } = new();
     public string VisualStyle { get; set; } = "";
     public string VoiceNotes { get; set; } = "";

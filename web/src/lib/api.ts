@@ -30,7 +30,10 @@ export interface Channel {
   persona: string;
   audience: string;
   tone: string;
+  /** Legacy single value, kept in sync with the range's lower bound. */
   videoLengthTargetMinutes: number;
+  videoLengthMinMinutes: number;
+  videoLengthMaxMinutes: number;
   scriptStructure: string[];
   visualStyle: string;
   voiceNotes: string;
@@ -74,7 +77,14 @@ export interface Manifest {
     instagram: StageStatus;
   };
   review: { scriptApproved: boolean; videoApproved: boolean };
-  publish: { title: string; description: string; tags: string[]; hasThumbnail: boolean };
+  publish: {
+    title: string;
+    description: string;
+    tags: string[];
+    hasThumbnail: boolean;
+    /** Planned publish date. A plan only — nothing publishes on a timer. */
+    scheduledUtc: string | null;
+  };
 }
 
 export interface Beat { index: number; narration: string; imagePrompt: string }
@@ -110,7 +120,15 @@ export interface Job {
 }
 
 export type StageName =
-  | "voice" | "images" | "video" | "thumbnail" | "upload" | "facebook" | "instagram";
+  | "voice" | "images" | "video" | "thumbnail"
+  | "upload" | "facebook" | "instagram" | "publish-all";
+
+/** Publish destinations a card can trigger, in the order "Upload all" runs them. */
+export const PUBLISH_TARGETS = [
+  { stage: "upload"    as const, key: "upload"    as const, label: "YouTube" },
+  { stage: "facebook"  as const, key: "facebook"  as const, label: "Facebook" },
+  { stage: "instagram" as const, key: "instagram" as const, label: "Instagram" },
+];
 
 // ---- Settings --------------------------------------------------------------
 
@@ -229,6 +247,8 @@ export const api = {
   deleteRun: (id: string) =>
     http.delete<{ deleted: string; files: number; sizeBytes: number }>(`/api/runs/${id}`)
       .then((r) => r.data),
+  scheduleRun: (id: string, scheduledUtc: string | null) =>
+    http.put<Manifest>(`/api/runs/${id}/schedule`, { scheduledUtc }).then((r) => r.data),
   job: (id: string) => http.get<Job>(`/api/jobs/${id}?since=0`).then((r) => r.data),
 
   generateScript: (channel: string, topic: string, auto: boolean) =>
@@ -275,6 +295,25 @@ export function nextStage(m: Manifest): string | null {
   return STAGE_ORDER.find((k) => !m.stages[k].done) ?? null;
 }
 
+/** Words-per-minute the script stage assumes. Mirrors ClaudeCliScriptGenerator. */
+export const WPM_LOW = 130;
+export const WPM_HIGH = 150;
+
+/** What a channel's length range costs, in the terms that matter: words and images. */
+export function lengthBudget(minMin: number, maxMin: number) {
+  const lo = Math.max(1, minMin || 1);
+  const hi = Math.max(lo, maxMin || lo);
+  const words = { min: lo * WPM_LOW, max: hi * WPM_HIGH };
+  return {
+    lo, hi,
+    isRange: hi > lo,
+    minutesLabel: hi > lo ? `${lo}-${hi} min` : `${lo} min`,
+    words,
+    wordsLabel: `${words.min}–${words.max}`,
+    beats: { min: Math.round(words.min / 6), max: Math.round(words.max / 6) },
+  };
+}
+
 export function formatBytes(bytes: number): string {
   if (!bytes) return "0 B";
   const units = ["B", "KB", "MB", "GB"];
@@ -290,7 +329,9 @@ export function newChannelTemplate(name: string): Partial<Channel> {
     persona: "",
     audience: "",
     tone: "",
-    videoLengthTargetMinutes: 5,
+    videoLengthTargetMinutes: 3,
+    videoLengthMinMinutes: 3,
+    videoLengthMaxMinutes: 5,
     scriptStructure: ["Cold open hook", "Plain-language answer", "Mechanism in 3-4 beats", "Recap + outro"],
     visualStyle: "",
     voiceNotes: "",
