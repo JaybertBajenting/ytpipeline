@@ -28,6 +28,10 @@ secrets.json
 videos/
 logs/
 
+# Reference material downloaded for format study (third-party audio and transcripts).
+# Local analysis only — must never be redistributed via the repo.
+_research/
+
 # IDE
 .vs/
 .idea/

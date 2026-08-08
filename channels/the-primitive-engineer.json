@@ -1,0 +1,30 @@
+{
+  "name": "The Primitive Engineer",
+  "tagline": "",
+  "persona": "",
+  "audience": "",
+  "tone": "",
+  "videoLengthTargetMinutes": 3,
+  "videoLengthMinMinutes": 3,
+  "videoLengthMaxMinutes": 5,
+  "scriptStructure": [
+    "Cold open hook",
+    "Plain-language answer",
+    "Mechanism in 3-4 beats",
+    "Recap + outro"
+  ],
+  "visualStyle": "",
+  "voiceNotes": "",
+  "voice": {
+    "voiceId": "",
+    "voiceName": "",
+    "modelId": ""
+  },
+  "music": true,
+  "youtube": {
+    "categoryId": "27",
+    "defaultTags": [],
+    "titlePattern": "{topic}",
+    "descriptionFooter": ""
+  }
+}
