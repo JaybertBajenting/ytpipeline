@@ -492,12 +492,30 @@ function ChannelEditor({ channel, onBack }: { channel: Channel; onBack: () => vo
               onChange={(e) => setVoice({ voiceName: e.target.value })}
               hint="Shown around the UI, since the ID alone is unreadable."
             />
-            <Select label="Model" value={draft.voice.modelId} onChange={(e) => setVoice({ modelId: e.target.value })}>
+            <Select
+              label="Model"
+              value={draft.voice.modelId}
+              onChange={(e) => setVoice({ modelId: e.target.value })}
+              hint="Pick the model the voice was designed with. v3 is the most expressive; v2 is the safest for A/V sync — see the note below."
+            >
               <option value="">Inherit global</option>
-              <option value="eleven_multilingual_v2">eleven_multilingual_v2</option>
-              <option value="eleven_turbo_v2_5">eleven_turbo_v2_5</option>
-              <option value="eleven_flash_v2_5">eleven_flash_v2_5</option>
+              <option value="eleven_v3">eleven_v3 — most expressive (5,000 char limit)</option>
+              <option value="eleven_multilingual_v2">eleven_multilingual_v2 — 10,000 char limit</option>
+              <option value="eleven_turbo_v2_5">eleven_turbo_v2_5 — faster</option>
+              <option value="eleven_flash_v2_5">eleven_flash_v2_5 — fastest, 40,000 char limit</option>
             </Select>
+
+            {draft.voice.modelId === "eleven_v3" && (
+              <Callout tone="warn" title="v3 and image timing">
+                The voice stage asks for per-character timestamps and uses them to sync each image
+                to the exact word it's spoken over. ElevenLabs doesn't document whether
+                <code> eleven_v3</code> returns alignment on the <code>with-timestamps</code>
+                endpoint. If it doesn't, the run still completes — the video stage falls back to
+                splitting each beat by word count, so cuts land close but not exactly on the
+                narration. Check the voice stage log for
+                "returned no alignment" after your first v3 run.
+              </Callout>
+            )}
             <Switch
               checked={overriding}
               onChange={(on) => setVoice(on
