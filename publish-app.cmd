@@ -8,6 +8,12 @@ if errorlevel 1 goto :error
 call npm --prefix web run build
 if errorlevel 1 goto :error
 
+REM dotnet publish copies into app\ without pruning, so old hashed bundles pile up in
+REM app\wwwroot and it stops being obvious which build the packaged app is actually serving.
+REM Clearing it first means app\wwwroot always holds exactly one frontend.
+echo === Clearing previously published frontend ===
+if exist "app\wwwroot" rmdir /s /q "app\wwwroot"
+
 echo === Publishing app (single self-contained exe) ===
 dotnet publish src\YtPipeline.Web\YtPipeline.Web.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o app
 if errorlevel 1 goto :error
