@@ -1,0 +1,10 @@
+# cmd.exe REQUIRES CRLF. A batch file saved with bare LF endings parses catastrophically —
+# it silently drops the leading character of most lines ("echo" becomes "cho", "call" becomes
+# "l") and the script fails in a way that looks like a corrupt install rather than a line-ending
+# problem. Pin these so an editor or tool that prefers LF cannot break them again.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Everything else: normalise in the repo, let git decide on checkout.
+* text=auto

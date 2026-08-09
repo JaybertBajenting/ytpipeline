@@ -9,8 +9,10 @@ echo === Closing YtPipeline if it is running ===
 taskkill /IM YtPipeline.exe /F >nul 2>&1
 if not errorlevel 1 (
   echo   closed a running instance
-  REM Windows releases the file handle a moment after the process dies.
-  timeout /t 2 /nobreak >nul
+  REM Windows releases the file handle a moment after the process dies. `ping` is used as the
+  REM delay rather than `timeout`, which aborts with "Input redirection is not supported"
+  REM whenever stdin isn't a console.
+  ping -n 3 127.0.0.1 >nul
 ) else (
   echo   not running
 )
