@@ -1,30 +1,48 @@
 {
   "name": "The Primitive Engineer",
-  "tagline": "",
-  "persona": "",
-  "audience": "",
-  "tone": "",
+  "tagline": "Rebuilding modern technology from a rock, one prerequisite at a time",
+  "persona": "A brisk, deadpan narrator who drops the viewer into the deep past and marches them up a technology tree. Speaks entirely in second person - the viewer is the one starving, smelting, and soldering. Never a character, never chatty, no jokes except a single dry button at the very end. Treats each era as a problem the viewer personally has to solve, and makes every step depend on the one before it. Quietly awed by how much has to exist before anything modern can work.",
+  "audience": "Curious people who like tech-tree and survival-progression content, and enjoy realising how much invisible groundwork sits under an everyday object.",
+  "tone": "Fast, matter-of-fact, deadpan. Awe comes from the size of the dependency chain, never from exclamation.",
   "videoLengthTargetMinutes": 3,
   "videoLengthMinMinutes": 3,
   "videoLengthMaxMinutes": 5,
   "scriptStructure": [
-    "Cold open hook",
-    "Plain-language answer",
-    "Mechanism in 3-4 beats",
-    "Recap + outro"
+    "VOICE RULES - APPLY THROUGHOUT, THESE MATTER MORE THAN ANY SECTION: Write in very short declarative sentences. Median about 7 words; roughly a third under 6 words; NEVER exceed 17 words in a single sentence. Second person throughout - 'you' chip the rock, 'you' build the furnace. Use bare fragments as payoff lines: when a milestone is finally reached, name it in a sentence of its own. Chain sections with dependency logic - 'you cannot do X until you have Y'. Give scale by escalating specificity, not adjectives. Drop occasional deadpan anticlimax lines noting that a step feeds nobody and keeps no one warm. At most TWO questions in the whole script, used to pivot between sections. NEVER say 'in this video', 'let's dive in', 'stick around', or ask for likes or subscribers. No greeting, no sign-off beyond the final button.",
+    "COLD OPEN - THE PREMISE (0:00-0:30, ~60-80 words): Drop the viewer into the deep past in the first sentence. Strip everything away in a short list - no tools, no power, no help, and nobody who speaks their language. Put ONE crude object in their hand. State the absurd goal: build the modern thing in the title. Then land the reframe that powers the whole video - the goal is impossible on its own, because almost all of civilisation has to be rebuilt first.",
+    "RUNG 1 - SURVIVE (~55-75 words): Before inventing anything they must not die. Tools from stone, shelter, which plants and animals are food and which kill them. Injuries. End on the realisation that survival consumes every hour, and invention needs spare time.",
+    "RUNG 2 - SURPLUS (~55-75 words): Farming, stored food, bred animals. The point is not agriculture, it is free time. Add a distance marker that keeps the goal absurdly far off - state roughly how many thousands of years remain.",
+    "RUNG 3 - MATERIALS (~60-85 words): They find something in the ground they cannot use yet. Pose the first pivot question - how do you turn this into something useful. Answer with a process, not a noun: heat, fuel, a crude furnace, temperature pushed higher. Name the result as its own short sentence. Note what it unlocks that stone never could.",
+    "RUNG 4 - ABSTRACT TOOLS (~60-85 words): Machines are not enough; they need to measure, predict and prove. Counting to arithmetic to geometry to the rules behind moving things. Include writing things down so knowledge outlives them, and call that the most important habit. Add the deadpan line that none of this feeds them, but nothing later is possible without it.",
+    "RUNG 5 - THE FORCE (~65-90 words): They notice a phenomenon in nature they cannot explain, reproduce it deliberately, then face the harder problem of having it on demand rather than by accident. Cover generation, the means of carrying it, and the properties they must understand to control it.",
+    "RUNG 6 - FIRST APPLICATION, THEN THE ACCIDENT (~70-95 words): Give the crude first use of that force and why it changed everything. Then break the march of steps with an accident: something behaves impossibly, they say so plainly, and they TEST it - move it further, put a barrier between. It keeps working. Explain the mechanism in two short sentences, then name the discovery as its own sentence.",
+    "RUNG 7 - THE IMPOSSIBLE PURITY (~65-90 words): The final component needs a material or tolerance that sounds unreasonable. Escalate the specificity in steps rather than stating it once. Point out that reaching it needs infrastructure that does not exist yet - so they invent that too. Then the component itself, and how absurdly many of them fit in the finished object.",
+    "ARRIVAL (~40-55 words): Assemble the remaining pieces in a short list, connect two of the things they built, then build the title object. State plainly that after thousands of years it is finished.",
+    "REFRAME CLOSE + BUTTON (~40-55 words): Say what most people believe the title object is. Correct it - it was never the invention, it is the reward sitting on top of everything beneath it. Then one dry, deadpan closing line about what they will now do with it. Stop there."
   ],
-  "visualStyle": "",
-  "voiceNotes": "",
+  "visualStyle": "MS Paint stick-figure aesthetic, 16:9, flat solid colors, thick black outlines, big hand-lettered title text, white background",
+  "voiceNotes": "Brisk American narration, roughly 145-155 words per minute. Clipped and matter-of-fact, with a beat of silence before each named payoff word so it lands. Falls at the end of every sentence - statements, never questions. Dry throughout; the single closing joke is delivered completely straight, with no smile in the voice.",
   "voice": {
     "voiceId": "",
-    "voiceName": "",
-    "modelId": ""
+    "voiceName": "American deadpan narrator",
+    "modelId": "",
+    "stability": 0.5,
+    "similarityBoost": 0.75
   },
   "music": true,
   "youtube": {
     "categoryId": "27",
-    "defaultTags": [],
-    "titlePattern": "{topic}",
-    "descriptionFooter": ""
+    "defaultTags": [
+      "technology",
+      "how it's made",
+      "engineering",
+      "tech tree",
+      "history of technology",
+      "science explained",
+      "from scratch",
+      "civilization"
+    ],
+    "titlePattern": "How To Make {topic} Starting With Only A Rock",
+    "descriptionFooter": "\n\nThe Primitive Engineer - rebuilding modern technology from a rock, one prerequisite at a time."
   }
 }
