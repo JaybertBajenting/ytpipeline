@@ -559,15 +559,23 @@ function ChannelEditor({ channel, onBack }: { channel: Channel; onBack: () => vo
               value={draft.visualStyle}
               onChange={(e) => set("visualStyle", e.target.value)}
             />
-            {draft.hasImageRule ? (
-              <Callout tone="info" title="Image rule file in use">
-                <code>channels/{draft.id}.image.md</code> exists, so it takes precedence over the
-                text above for image generation.
+            {draft.imageRuleSource === "channel" ? (
+              <Callout tone="info" title="Using its own image rule">
+                <code>channels/{draft.id}.image.md</code> exists, so this channel has a look of its
+                own and ignores both the shared default and the text above. Delete that file to fall
+                back to the default style.
+              </Callout>
+            ) : draft.imageRuleSource === "default" ? (
+              <Callout tone="warn" title="Using the shared default look">
+                There's no <code>{draft.id}.image.md</code>, so this channel renders with
+                <code> _default.image.md</code> — the MS-Paint stick-figure style shared by every
+                channel without its own rule. Add that file to give this channel a different look.
               </Callout>
             ) : (
-              <Callout tone="warn">
-                No <code>{draft.id}.image.md</code> — this channel falls back to the shared
-                <code> _default.image.md</code> rule.
+              <Callout tone="err" title="No image rule at all">
+                Neither <code>{draft.id}.image.md</code> nor <code>_default.image.md</code> was
+                found, so image generation falls back to the free-text visual style above — which is
+                far weaker direction than a rule file.
               </Callout>
             )}
           </div>

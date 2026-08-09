@@ -258,7 +258,10 @@ static object Describe(string id, YtPipeline.Core.Models.Channel c) => new
     c.Voice,
     c.Music,
     c.Youtube,
-    hasImageRule = !string.IsNullOrWhiteSpace(c.ImageInstructions),
+    // "channel" | "default" | "none". hasImageRule alone was ambiguous: it was true even when
+    // the channel had no file of its own and was only inheriting the shared default.
+    imageRuleSource = c.ImageRuleSource,
+    hasImageRule = c.ImageRuleSource == "channel",
 };
 
 // --- Runs -------------------------------------------------------------------

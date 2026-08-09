@@ -40,8 +40,10 @@ export interface Channel {
   voice: ChannelVoice;
   music: boolean;
   youtube: YoutubeDefaults;
-  /** True when a <id>.image.md rule file exists next to the channel JSON. */
+  /** True only when the channel has its OWN <id>.image.md — not when inheriting the default. */
   hasImageRule: boolean;
+  /** Which rule is actually in force: its own file, the shared default, or nothing. */
+  imageRuleSource: "channel" | "default" | "none";
 }
 
 // ---- Runs ------------------------------------------------------------------

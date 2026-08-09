@@ -25,9 +25,15 @@ public sealed class ChannelLoader
         var rulePath = Path.Combine(_channelsDir, channelId + ".image.md");
         var defaultPath = Path.Combine(_channelsDir, "_default.image.md");
         if (File.Exists(rulePath))
+        {
             channel.ImageInstructions = File.ReadAllText(rulePath);
+            channel.ImageRuleSource = "channel";
+        }
         else if (File.Exists(defaultPath))
+        {
             channel.ImageInstructions = File.ReadAllText(defaultPath);
+            channel.ImageRuleSource = "default";
+        }
 
         return channel;
     }

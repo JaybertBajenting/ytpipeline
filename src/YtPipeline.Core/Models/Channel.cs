@@ -58,6 +58,15 @@ public sealed class Channel
     /// </summary>
     [JsonIgnore]
     public string ImageInstructions { get; set; } = "";
+
+    /// <summary>
+    /// Where <see cref="ImageInstructions"/> came from: <c>channel</c> (its own
+    /// <c>&lt;id&gt;.image.md</c>), <c>default</c> (the shared <c>_default.image.md</c>), or
+    /// <c>none</c>. Needed because a non-empty rule does NOT mean the channel has its own —
+    /// conflating the two made the UI claim per-channel files that don't exist.
+    /// </summary>
+    [JsonIgnore]
+    public string ImageRuleSource { get; set; } = "none";
 }
 
 /// <summary>
