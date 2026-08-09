@@ -45,7 +45,16 @@ export function RunDetail({ runId }: { runId: string }) {
   const st = m.stages;
   const sa = m.review.scriptApproved;
   const va = m.review.videoApproved;
-  const videoReady = st.images.done && st.voice.done;
+  // The images stage calls MarkDone even when it only produced some of the frames (gflow
+  // returns successfully as long as at least one PNG exists), so st.images.done cannot be
+  // trusted to mean "finished". Completeness is frames-on-disk vs the script's beat count.
+  const expectedFrames = script?.beats.length ?? 0;
+  const imagesPartial = expectedFrames > 0 && images.length > 0 && images.length < expectedFrames;
+  const imagesComplete = images.length > 0 && (expectedFrames === 0 || images.length >= expectedFrames);
+
+  // Assembling with frames missing yields a video with beats that have nothing to show, so the
+  // video stage waits for a complete set rather than merely a "done" flag.
+  const videoReady = imagesComplete && st.voice.done;
 
   const runStage = (s: any, p?: string, force?: boolean) =>
     !busy && stage.mutate({ stage: s, privacy: p, force });
@@ -231,20 +240,64 @@ export function RunDetail({ runId }: { runId: string }) {
 
         {/* 3 — Images */}
         <StageCard
-          stageKey="images" num={3} done={st.images.done}
+          stageKey="images" num={3}
+          // NOT st.images.done: the stage marks itself done even when it only produced some of
+          // the frames, so trusting that flag puts a green tick on an unfinished set.
+          done={imagesComplete}
           running={activeStage === "images"}
           locked={!sa}
-          title={`Images — ${imageProvider}${st.images.count ? ` · ${st.images.count} frames` : ""}`}
+          title={`Images — ${imageProvider}${images.length ? ` · ${images.length}${expectedFrames ? `/${expectedFrames}` : ""} frames` : ""}`}
+          status={imagesPartial && <Badge tone="warn">{images.length}/{expectedFrames} — incomplete</Badge>}
           actions={
-            <Button
-              disabled={busy || !sa}
-              title={sa ? (st.images.done ? "Clears existing frames and regenerates all" : "") : "Approve the script first"}
-              onClick={() => runStage("images", undefined, st.images.done)}
-            >
-              {st.images.done ? "Regenerate images" : "Generate images"}
-            </Button>
+            <>
+              <Button
+                variant={imagesPartial ? "primary" : "secondary"}
+                disabled={busy || !sa}
+                title={sa
+                  ? "Generates only the beats that have no frame yet — existing frames are kept"
+                  : "Approve the script first"}
+                // force stays FALSE here. This is the button you press after a daily quota reset,
+                // and clearing first would throw away the frames you waited for.
+                onClick={() => runStage("images", undefined, false)}
+              >
+                {images.length === 0
+                  ? "Generate images"
+                  : imagesPartial
+                    ? `Continue — ${expectedFrames - images.length} left`
+                    : "Fill any gaps"}
+              </Button>
+
+              {images.length > 0 && (
+                <Button
+                  variant="danger"
+                  disabled={busy || !sa}
+                  title="Deletes all existing frames first, then regenerates every beat from scratch"
+                  onClick={() => {
+                    if (confirm(
+                      `Delete all ${images.length} existing frame(s) and regenerate from scratch?\n\n` +
+                      `They cost image quota to make, and this cannot be undone. ` +
+                      `To only fill missing beats, use the other button instead.`)) {
+                      runStage("images", undefined, true);
+                    }
+                  }}
+                >
+                  Regenerate all
+                </Button>
+              )}
+            </>
           }
         >
+          {imagesPartial && (
+            <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2.5 text-xs leading-relaxed text-amber-200/80">
+              <span className="font-semibold">
+                {images.length} of {expectedFrames} frames done.
+              </span>{" "}
+              The stage stopped early — usually the daily image quota. Press
+              <strong> Continue</strong> once it resets; it generates only the missing beats and
+              keeps what's already here. Don't press <strong>Regenerate all</strong> unless you
+              want to start over and spend the quota again.
+            </div>
+          )}
           {images.length > 0 && (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-2">
               {images.map((f) => (
@@ -277,7 +330,11 @@ export function RunDetail({ runId }: { runId: string }) {
           actions={
             <Button
               disabled={busy || !videoReady}
-              title={videoReady ? "" : "Need voice + images first"}
+              title={videoReady
+                ? ""
+                : imagesPartial
+                  ? `Only ${images.length} of ${expectedFrames} frames exist — finish the images stage first`
+                  : "Need voice + images first"}
               onClick={() => runStage("video")}
             >
               {st.video.done ? "Re-assemble video" : "Assemble video"}
