@@ -120,7 +120,7 @@ export interface Job {
 }
 
 export type StageName =
-  | "voice" | "images" | "video" | "thumbnail"
+  | "script" | "voice" | "images" | "video" | "thumbnail"
   | "upload" | "facebook" | "instagram" | "publish-all";
 
 /** Publish destinations a card can trigger, in the order "Upload all" runs them. */

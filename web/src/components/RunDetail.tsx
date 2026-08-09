@@ -146,6 +146,15 @@ export function RunDetail({ runId }: { runId: string }) {
         <StageCard
           stageKey="script" num={1} title="Script — Claude Opus 4.8"
           done={st.script.done} running={activeStage === "script"}
+          actions={
+            <Button
+              disabled={busy}
+              title={busy ? "A job is already running" : ""}
+              onClick={() => runStage("script")}
+            >
+              {script ? "Regenerate script" : "Retry script"}
+            </Button>
+          }
           status={st.script.done && (
             sa
               ? <Badge tone="ok">approved</Badge>
@@ -155,7 +164,20 @@ export function RunDetail({ runId }: { runId: string }) {
                 </Button>
           )}
         >
-          {script ? (
+          {!script && activeStage !== "script" ? (
+            // A spinner here regardless of state used to make a dead run look identical to a
+            // working one — which is exactly how a failed script stage went unnoticed.
+            <div className="space-y-2.5">
+              <div className="rounded-lg border border-red-500/25 bg-red-500/[0.06] px-3 py-2.5 text-xs leading-relaxed text-red-200/80">
+                <p className="font-semibold">No script — generation didn't finish.</p>
+                <p className="mt-1 text-red-200/60">
+                  Nothing is running for this video. The usual cause is the <code>claude</code> CLI
+                  failing at launch; check the log for the line after <code>exec claude</code>.
+                  Fix the cause, then retry below — no need to recreate the video.
+                </p>
+              </div>
+            </div>
+          ) : script ? (
             <div className="space-y-2.5">
               <div>
                 <p className="font-semibold text-white/90">{script.title}</p>

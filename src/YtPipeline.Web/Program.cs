@@ -325,6 +325,10 @@ app.MapPost("/api/runs/{id}/stage/{stage}", (string id, string stage, string? pr
     var run = pipeline.Runs.Resolve(id);
     Func<CancellationToken, Task> work = stage.ToLowerInvariant() switch
     {
+        // Retryable: the script is normally generated when the run is created, but if that call
+        // fails (expired CLI token, rate limit) the run is otherwise a dead end that can only be
+        // deleted and recreated.
+        "script" => ct => pipeline.ScriptAsync(run, ct),
         "images" => ct => pipeline.ImagesAsync(run, ct, regenerate: force),
         "voice" => ct => pipeline.VoiceAsync(run, ct),
         "video" => ct => pipeline.VideoAsync(run, ct),

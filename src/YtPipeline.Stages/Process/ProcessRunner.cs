@@ -86,7 +86,15 @@ public sealed class ProcessRunner(ILogger<ProcessRunner> logger)
 
         var result = new ProcessResult(proc.ExitCode, stdout.ToString(), stderr.ToString());
         if (!result.Success)
-            logger.LogWarning("{File} exited {Code}", fileName, result.ExitCode);
+        {
+            // Log WHY, not just that it failed. The reason is almost always in stderr — an
+            // expired token, a missing file, a rate limit — and logging the bare exit code sends
+            // you hunting through processes and folders for something the tool already said.
+            // Falls back to stdout because some CLIs report errors there.
+            var detail = FirstNonEmpty(result.StdErr, result.StdOut);
+            logger.LogWarning("{File} exited {Code}{Detail}", fileName, result.ExitCode,
+                string.IsNullOrWhiteSpace(detail) ? " (no output)" : $" — {Truncate(detail, 600)}");
+        }
         return result;
     }
 
@@ -101,5 +109,15 @@ public sealed class ProcessRunner(ILogger<ProcessRunner> logger)
         var result = await RunAsync(fileName, args, workingDirectory, stdin, ct);
         if (!result.Success) throw new ProcessException(fileName, result);
         return result;
+    }
+
+    private static string FirstNonEmpty(params string[] candidates) =>
+        candidates.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c))?.Trim() ?? "";
+
+    /// <summary>Keeps a wall of CLI output from burying the rest of the log.</summary>
+    private static string Truncate(string s, int max)
+    {
+        var flat = s.ReplaceLineEndings(" ").Trim();
+        return flat.Length <= max ? flat : flat[..max] + "…";
     }
 }

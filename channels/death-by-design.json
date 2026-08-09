@@ -22,7 +22,7 @@
   "voice": {
     "voiceId": "ZqPl8USo6wIn2SY4vRxL",
     "voiceName": "British RP documentary narrator",
-    "modelId": "eleven_multilingual_v2",
+    "modelId": "eleven_v3",
     "stability": 0.55,
     "similarityBoost": 0.8
   },
