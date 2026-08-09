@@ -4,7 +4,7 @@ import {
 } from "lucide-react";
 import { api, type StageStatus } from "@/lib/api";
 import {
-  useApprove, useCancelJob, useJob, useRun, useRunStage, useScheduleRun,
+  useApprove, useCancelJob, useJob, useRun, useRunStage, useScheduleRun, useSettings,
 } from "@/lib/hooks";
 import { useUi } from "@/lib/store";
 import { Badge, Button, SectionLabel, Spinner, Tag, selectCls } from "./ui";
@@ -22,8 +22,15 @@ export function RunDetail({ runId }: { runId: string }) {
   const approve = useApprove(runId);
   const cancel = useCancelJob();
   const schedule = useScheduleRun();
+  const { data: settings } = useSettings();
   const [privacy, setPrivacy] = useState("private");
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Read the provider from settings rather than hardcoding a name — the router resolves it at
+  // call time, so a stale label here just makes people doubt their own configuration.
+  const imageProvider = settings?.imageProvider === "gflow"
+    ? `gflow${settings.gflow.model ? ` · ${settings.gflow.model}` : ""}`
+    : settings?.imageProvider === "codex" ? "Codex" : "…";
 
   const data = runQ.data;
   const bust = runQ.dataUpdatedAt;
@@ -227,7 +234,7 @@ export function RunDetail({ runId }: { runId: string }) {
           stageKey="images" num={3} done={st.images.done}
           running={activeStage === "images"}
           locked={!sa}
-          title={`Images — Codex${st.images.count ? ` · ${st.images.count} frames` : ""}`}
+          title={`Images — ${imageProvider}${st.images.count ? ` · ${st.images.count} frames` : ""}`}
           actions={
             <Button
               disabled={busy || !sa}
