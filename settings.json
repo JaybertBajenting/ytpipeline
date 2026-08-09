@@ -1,5 +1,6 @@
 {
   "imageProvider": "gflow",
+  "imageFallbackProvider": "codex",
   "gflow": {
     "executable": "D:\\Tools\\uv\\bin\\flow.exe",
     "argsTemplate": [

@@ -152,6 +152,36 @@ function PipelineSettings({ section }: { section: "audio" | "images" }) {
                 gflow drives a real Chrome window, so leave it open and signed in while a run works.
               </Callout>
             )}
+
+            {/* Fallback: the whole point is finishing a video when a daily quota runs out
+                part-way, without hand-holding the switchover. */}
+            <div className="border-t border-white/[0.06] pt-4">
+              <Switch
+                checked={!!draft.imageFallbackProvider}
+                onChange={(on) => set(
+                  "imageFallbackProvider",
+                  on ? (isGflow ? "codex" : "gflow") : "",
+                )}
+                label={`Finish with ${isGflow ? "Codex" : "gflow"} if ${isGflow ? "gflow" : "Codex"} runs out`}
+                desc="When the primary stops short — usually a daily quota — the other provider generates the beats that are still missing, in the same run."
+              />
+
+              {draft.imageFallbackProvider && (
+                <div className="mt-3 space-y-2">
+                  <Callout tone="info" title="How the handover works">
+                    Both providers skip beats that already have a frame, so the fallback fills only
+                    the gaps — nothing already paid for is regenerated. gflow gives up after 4
+                    failures in a row rather than grinding through every remaining beat, so the
+                    switch happens quickly once the quota is gone.
+                  </Callout>
+                  <Callout tone="warn" title="Expect a visible seam">
+                    The two renderers don't look identical even on the same style rule, so a video
+                    finished this way can show a shift where the handover happened. Fine for getting
+                    a video out; not ideal if frame-to-frame consistency matters more than shipping.
+                  </Callout>
+                </div>
+              )}
+            </div>
           </div>
         </Card>
 

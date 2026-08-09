@@ -151,6 +151,8 @@ export interface GflowSettings {
 
 export interface AppSettings {
   imageProvider: ImageProvider;
+  /** Provider that finishes the job if the primary stops short. "" = disabled. */
+  imageFallbackProvider: ImageProvider | "";
   gflow: GflowSettings;
   voiceGain: number;
   musicEnabled: boolean;

@@ -12,6 +12,17 @@ public sealed class AppSettings
     /// <summary>Which backend produces the frame images: <c>codex</c> or <c>gflow</c>.</summary>
     public string ImageProvider { get; set; } = ImageProviders.Codex;
 
+    /// <summary>
+    /// Backend that finishes the job when <see cref="ImageProvider"/> stops short — typically
+    /// because a daily quota ran out mid-run. Empty disables the fallback.
+    /// <para>
+    /// Both generators skip beats that already have a frame, so the fallback naturally fills
+    /// only the gaps. Note the two renderers won't look identical even on the same style rule,
+    /// so a video finished this way can show a seam where the handover happened.
+    /// </para>
+    /// </summary>
+    public string ImageFallbackProvider { get; set; } = "";
+
     public GflowSettings Gflow { get; set; } = new();
 
     /// <summary>Linear gain on the ElevenLabs voice in the final mix (1.25 = +25%).</summary>

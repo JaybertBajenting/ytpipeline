@@ -62,6 +62,15 @@ public sealed class SettingsStore
             ImageProviders.Gflow => ImageProviders.Gflow,
             _ => ImageProviders.Codex,
         };
+
+        s.ImageFallbackProvider = s.ImageFallbackProvider?.Trim().ToLowerInvariant() switch
+        {
+            ImageProviders.Gflow => ImageProviders.Gflow,
+            ImageProviders.Codex => ImageProviders.Codex,
+            _ => "",
+        };
+        // A fallback equal to the primary would just re-run the same exhausted backend.
+        if (s.ImageFallbackProvider == s.ImageProvider) s.ImageFallbackProvider = "";
         s.VoiceGain = Math.Clamp(s.VoiceGain, 0.1, 4.0);
         s.MusicVolume = Math.Clamp(s.MusicVolume, 0.0, 1.0);
         s.Gflow ??= new GflowSettings();

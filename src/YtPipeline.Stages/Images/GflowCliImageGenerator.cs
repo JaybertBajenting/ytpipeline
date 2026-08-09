@@ -27,6 +27,14 @@ public sealed class GflowCliImageGenerator(
     /// <summary>Retries for a single beat before the run gives up.</summary>
     private const int MaxAttemptsPerBeat = 2;
 
+    /// <summary>
+    /// Stop dispatching after this many failures in a row. An exhausted daily quota fails every
+    /// remaining beat, and grinding through all of them — two attempts and a timeout each — wastes
+    /// a long time before a configured fallback provider ever gets a turn. A single transient
+    /// hiccup won't trip this, because any success resets the counter.
+    /// </summary>
+    private const int AbandonAfterConsecutiveFailures = 4;
+
     public async Task<IReadOnlyList<string>> GenerateAsync(
         Run run, ScriptDocument script, Channel channel, CancellationToken ct, bool regenerate = false)
     {
@@ -55,7 +63,7 @@ public sealed class GflowCliImageGenerator(
         // would just serialise them again.
         await NetworkGuard.WaitForConnectivityAsync(logger, ct);
 
-        int failed = 0, done = 0;
+        int failed = 0, done = 0, consecutiveFailures = 0, abandoned = 0;
         using var gate = new SemaphoreSlim(lanes);
 
         var tasks = todo.Select(async beat =>
@@ -64,13 +72,38 @@ public sealed class GflowCliImageGenerator(
             try
             {
                 ct.ThrowIfCancellationRequested();
+
+                // Already given up — drain the remaining lanes without calling gflow again.
+                if (Volatile.Read(ref abandoned) != 0) return;
+
                 var target = Path.Combine(run.ImagesDir, $"beat{beat.Index:D2}_gflow.png");
                 var ok = await GenerateOneAsync(beat, channel, target, cfg, ct);
 
                 // Progress is reported on completion, so the count reflects real progress
                 // rather than dispatch order.
                 var n = Interlocked.Increment(ref done);
-                if (!ok) Interlocked.Increment(ref failed);
+                if (ok)
+                {
+                    Volatile.Write(ref consecutiveFailures, 0);
+                }
+                else
+                {
+                    Interlocked.Increment(ref failed);
+                    if (Interlocked.Increment(ref consecutiveFailures) >= AbandonAfterConsecutiveFailures
+                        && Interlocked.Exchange(ref abandoned, 1) == 0)
+                    {
+                        // Don't guess at the cause here — the per-beat warnings above carry
+                        // gflow's own stderr, which distinguishes an exhausted quota from a
+                        // browser/session problem. Asserting "probably quota" sent one
+                        // investigation down the wrong path already.
+                        logger.LogWarning(
+                            "{Count} beats failed in a row — abandoning gflow for this run. " +
+                            "See the gflow errors above for the reason. {Left} beat(s) left " +
+                            "ungenerated; a fallback provider (or a later re-run) will fill them.",
+                            AbandonAfterConsecutiveFailures, todo.Count - n);
+                    }
+                }
+
                 logger.LogInformation("[gflow {Done}/{Total}] beat {Beat} {Status}",
                     n, todo.Count, beat.Index, ok ? "ok" : "FAILED");
             }
