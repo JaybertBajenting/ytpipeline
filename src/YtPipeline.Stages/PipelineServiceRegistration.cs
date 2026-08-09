@@ -43,6 +43,10 @@ public static class PipelineServiceRegistration
         // stays free of anything that shouldn't be shared.
         services.AddSingleton(new SecretsStore(workspaceRoot));
 
+        // Which providers are quota-benched, and when to retry them. Operational state, so it
+        // lives beside settings rather than inside them.
+        services.AddSingleton(new ProviderHealthStore(workspaceRoot));
+
         // Stage options. NOTE: the config binder APPENDS to existing List<T> values, so we
         // clear the constructor defaults before binding to avoid duplicated CLI args.
         var claude = new ClaudeOptions();

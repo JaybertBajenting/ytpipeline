@@ -6,13 +6,14 @@ import {
 } from "lucide-react";
 import type { AppSettings, SecretsUpdate, SecretsView } from "@/lib/api";
 import {
-  useChannels, useCheckGflow, useSaveSecrets, useSaveSettings, useSecrets, useSettings,
+  useChannels, useCheckGflow, useProviderHealth, useSaveSecrets, useSaveSettings,
+  useSecrets, useSettings,
 } from "@/lib/hooks";
 import { useUi } from "@/lib/store";
 import { PublishingGuide } from "@/components/PublishingGuide";
 import {
-  Badge, Button, Callout, Card, CardHead, Field, Input, PageHead, SecretInput, Select,
-  Skeleton, Slider, Switch, TabList, TabPanel, TabTrigger, Tabs, Toast, inputCls,
+  Badge, Button, Callout, Card, CardHead, Field, Input, PageHead, SectionLabel, SecretInput,
+  Select, Skeleton, Slider, Switch, TabList, TabPanel, TabTrigger, Tabs, Toast, inputCls,
 } from "@/components/ui";
 
 export function SettingsPage() {
@@ -168,17 +169,21 @@ function PipelineSettings({ section }: { section: "audio" | "images" }) {
 
               {draft.imageFallbackProvider && (
                 <div className="mt-3 space-y-2">
-                  <Callout tone="info" title="How the handover works">
-                    Both providers skip beats that already have a frame, so the fallback fills only
-                    the gaps — nothing already paid for is regenerated. gflow gives up after 4
-                    failures in a row rather than grinding through every remaining beat, so the
-                    switch happens quickly once the quota is gone.
+                  <Callout tone="info" title="How the switching works">
+                    The provider above is the <strong>preferred</strong> one, not a fixed one. When
+                    it reports its daily quota gone it's benched, and later runs go straight to the
+                    standby — no attempts wasted rediscovering the same wall. After a cooldown the
+                    preferred provider is tried again automatically, so the real reset is discovered
+                    rather than guessed, and it takes back over the moment it works. Only quota
+                    errors bench a provider; a sign-in or CAPTCHA failure is surfaced instead, since
+                    that's fixable.
                   </Callout>
                   <Callout tone="warn" title="Expect a visible seam">
                     The two renderers don't look identical even on the same style rule, so a video
-                    finished this way can show a shift where the handover happened. Fine for getting
-                    a video out; not ideal if frame-to-frame consistency matters more than shipping.
+                    finished across both can show a shift where the handover happened. Fine for
+                    getting a video out; not ideal if frame-to-frame consistency matters more.
                   </Callout>
+                  <ProviderHealthPanel />
                 </div>
               )}
             </div>
@@ -294,6 +299,42 @@ function PipelineSettings({ section }: { section: "audio" | "images" }) {
       {SaveBar}
       <Toast show={toast}>Settings saved.</Toast>
     </>
+  );
+}
+
+/** Live view of which providers are benched — makes the automatic switching legible. */
+function ProviderHealthPanel() {
+  const { data } = useProviderHealth();
+  if (!data?.length) return null;
+
+  return (
+    <div className="rounded-lg border border-white/[0.07] bg-white/[0.02] p-3">
+      <div className="mb-2"><SectionLabel>Provider status</SectionLabel></div>
+      <div className="space-y-1.5">
+        {data.map((p) => (
+          <div key={p.provider} className="flex items-center gap-2 text-[11px]">
+            <span className="w-14 shrink-0 font-mono text-white/70">{p.provider}</span>
+            {p.preferred && <Badge tone="info">preferred</Badge>}
+            {p.standby && <Badge tone="muted">standby</Badge>}
+            {p.benched
+              ? <Badge tone="warn">
+                  quota — retry in {p.retryInMinutes !== null ? `${Math.max(0, Math.round(p.retryInMinutes))} min` : "a while"}
+                </Badge>
+              : <Badge tone="ok">available</Badge>}
+            {p.consecutiveProbeFailures > 0 && (
+              <span className="text-white/25">
+                {p.consecutiveProbeFailures} retry{p.consecutiveProbeFailures === 1 ? "" : "ies"} still out
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      {data.some((p) => p.benched && p.lastError) && (
+        <p className="mt-2 border-t border-white/[0.06] pt-2 font-mono text-[10px] leading-relaxed text-white/30">
+          {data.find((p) => p.benched && p.lastError)!.lastError}
+        </p>
+      )}
+    </div>
   );
 }
 

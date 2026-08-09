@@ -6,83 +6,121 @@ using YtPipeline.Core.Services;
 namespace YtPipeline.Stages.Images;
 
 /// <summary>
-/// Dispatches Stage 2 to whichever image backend is selected in Settings, and — when a fallback
-/// is configured — hands the leftovers to the other backend if the first one stops short.
+/// Dispatches Stage 2 to an image backend, treating <see cref="AppSettings.ImageProvider"/> as the
+/// PREFERRED provider rather than a fixed one.
 /// <para>
-/// The provider is resolved per call (not at startup) so switching it in the UI takes effect on
-/// the next stage run without restarting the app.
+/// When the preferred provider reports its quota exhausted it is benched, and subsequent runs go
+/// straight to the standby — no attempts wasted rediscovering the same wall. Once the cooldown
+/// expires the preferred provider is tried again automatically, so the real reset is discovered
+/// rather than predicted, and it takes over again the moment it works.
 /// </para>
 /// </summary>
 public sealed class ImageGeneratorRouter(
     CodexCliImageGenerator codex,
     GflowCliImageGenerator gflow,
     SettingsStore settings,
+    ProviderHealthStore health,
     ILogger<ImageGeneratorRouter> logger) : IImageGenerator
 {
     public async Task<IReadOnlyList<string>> GenerateAsync(
         Run run, ScriptDocument script, Channel channel, CancellationToken ct, bool regenerate = false)
     {
         var cfg = settings.Current;
-        var primaryName = cfg.ImageProvider;
-        var fallbackName = cfg.ImageFallbackProvider;
-
-        logger.LogInformation("Image provider: {Provider}{Fallback}", primaryName,
-            string.IsNullOrEmpty(fallbackName) ? "" : $" (fallback: {fallbackName})");
-
+        var preferred = cfg.ImageProvider;
+        var standby = cfg.ImageFallbackProvider;
         var expected = script.Beats.Count;
-        IReadOnlyList<string> images;
 
-        try
+        // ── Is the preferred provider benched? ───────────────────────────────
+        var benchedUntil = health.BenchedUntil(preferred, cfg.QuotaCooldownMinutes);
+        var order = new List<string>();
+
+        if (benchedUntil is { } until && !string.IsNullOrEmpty(standby))
         {
-            images = await Generator(primaryName).GenerateAsync(run, script, channel, ct, regenerate);
+            logger.LogWarning(
+                "{Preferred} is benched (quota) for another {Mins:F0} min — using {Standby} instead. " +
+                "It will be retried automatically after that.",
+                preferred, (until - DateTime.UtcNow).TotalMinutes, standby);
+            order.Add(standby);
+            // Still worth a shot at the end: the standby may leave gaps, and by then the
+            // cooldown may have lapsed anyway.
+            order.Add(preferred);
         }
-        catch (OperationCanceledException) { throw; }
-        catch (Exception ex) when (!string.IsNullOrEmpty(fallbackName))
+        else
         {
-            // A hard failure from the primary (quota gone before it made anything, CLI not signed
-            // in) is exactly when the fallback earns its keep. Without a fallback configured the
-            // exception propagates as before.
-            logger.LogWarning(ex, "{Primary} failed outright — handing over to {Fallback}.",
-                primaryName, fallbackName);
-            images = Array.Empty<string>();
+            if (benchedUntil is not null)
+                logger.LogWarning(
+                    "{Preferred} is benched (quota) but no standby provider is configured — trying it anyway.",
+                    preferred);
+            order.Add(preferred);
+            if (!string.IsNullOrEmpty(standby)) order.Add(standby);
         }
 
-        if (string.IsNullOrEmpty(fallbackName) || images.Count >= expected)
-            return images;
+        logger.LogInformation("Image provider order: {Order}", string.Join(" → ", order));
 
-        // Both generators skip beats that already have a frame, so this fills only the gaps.
-        // regenerate is deliberately NOT forwarded: it clears the images folder, which would
-        // destroy everything the primary just produced.
-        logger.LogWarning(
-            "{Primary} produced {Got}/{Expected} frames — switching to {Fallback} for the rest.",
-            primaryName, images.Count, expected, fallbackName);
+        IReadOnlyList<string> images = ImageSet.List(run.ImagesDir);
+        Exception? last = null;
 
-        try
+        for (int i = 0; i < order.Count; i++)
         {
-            var filled = await Generator(fallbackName)
-                .GenerateAsync(run, script, channel, ct, regenerate: false);
+            var name = order[i];
+            if (images.Count >= expected) break;
 
-            logger.LogInformation(
-                "Fallback {Fallback} brought the set to {Got}/{Expected} frames.",
-                fallbackName, filled.Count, expected);
-            return filled;
+            // regenerate clears the folder, so it may only ever apply to the FIRST attempt —
+            // forwarding it later would delete what an earlier provider just produced.
+            var clearFirst = regenerate && i == 0;
+
+            try
+            {
+                images = await Generator(name).GenerateAsync(run, script, channel, ct, clearFirst);
+                if (images.Count >= expected)
+                {
+                    logger.LogInformation("{Name} completed the set: {Count}/{Expected}.",
+                        name, images.Count, expected);
+                    break;
+                }
+
+                logger.LogWarning("{Name} produced {Count}/{Expected} frames.", name, images.Count, expected);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                last = ex;
+                logger.LogWarning("{Name} failed: {Message}", name, ex.Message);
+                images = ImageSet.List(run.ImagesDir);   // keep whatever it managed first
+            }
         }
-        catch (OperationCanceledException) { throw; }
-        catch (Exception ex)
-        {
-            // Keep whatever the primary managed: the stage is resumable, so a partial set is
-            // strictly better than throwing away paid frames.
-            logger.LogError(ex, "Fallback {Fallback} also failed — keeping {Got} frame(s).",
-                fallbackName, images.Count);
-            if (images.Count == 0) throw;
-            return images;
-        }
+
+        if (images.Count == 0 && last is not null) throw last;
+
+        if (images.Count < expected)
+            logger.LogWarning(
+                "Images stage finished short: {Count}/{Expected}. Re-run to fill the rest — " +
+                "existing frames are kept.", images.Count, expected);
+
+        return images;
     }
 
-    /// <summary>Thumbnails are a single image, so there's nothing to split — primary only.</summary>
-    public Task<string> GenerateThumbnailAsync(
-        Run run, ScriptDocument script, Channel channel, CancellationToken ct) =>
-        Generator(settings.Current.ImageProvider).GenerateThumbnailAsync(run, script, channel, ct);
+    /// <summary>Thumbnails are a single image, so there's nothing to split — preferred, then standby.</summary>
+    public async Task<string> GenerateThumbnailAsync(
+        Run run, ScriptDocument script, Channel channel, CancellationToken ct)
+    {
+        var cfg = settings.Current;
+        var benched = health.BenchedUntil(cfg.ImageProvider, cfg.QuotaCooldownMinutes) is not null;
+        var first = benched && !string.IsNullOrEmpty(cfg.ImageFallbackProvider)
+            ? cfg.ImageFallbackProvider
+            : cfg.ImageProvider;
+
+        try { return await Generator(first).GenerateThumbnailAsync(run, script, channel, ct); }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) when (!string.IsNullOrEmpty(cfg.ImageFallbackProvider)
+                                   && first != cfg.ImageFallbackProvider)
+        {
+            logger.LogWarning(ex, "Thumbnail via {First} failed — trying {Standby}.",
+                first, cfg.ImageFallbackProvider);
+            return await Generator(cfg.ImageFallbackProvider)
+                .GenerateThumbnailAsync(run, script, channel, ct);
+        }
+    }
 
     private IImageGenerator Generator(string provider) =>
         provider == ImageProviders.Gflow ? gflow : codex;

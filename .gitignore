@@ -24,6 +24,9 @@ client_secret.json
 # Publishing credentials entered in Settings → Publishing
 secrets.json
 
+# Transient operational state: which providers are quota-benched right now
+provider-health.json
+
 # Per-run working files (regenerated): videos/<channel>/<timestamp>/
 videos/
 logs/

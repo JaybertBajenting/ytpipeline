@@ -159,6 +159,19 @@ export interface AppSettings {
   musicVolume: number;
 }
 
+/** Whether a provider is currently benched for quota, and when it gets retried. */
+export interface ProviderHealth {
+  provider: ImageProvider;
+  preferred: boolean;
+  standby: boolean;
+  benched: boolean;
+  benchedUntilUtc: string | null;
+  retryInMinutes: number | null;
+  exhaustedUtc: string | null;
+  consecutiveProbeFailures: number;
+  lastError: string;
+}
+
 export interface GflowCheck {
   installed: boolean;
   version: string | null;
@@ -274,6 +287,7 @@ export const api = {
   settings: () => http.get<AppSettings>("/api/settings").then((r) => r.data),
   saveSettings: (s: AppSettings) => http.put<AppSettings>("/api/settings", s).then((r) => r.data),
   checkGflow: () => http.get<GflowCheck>("/api/settings/check-gflow").then((r) => r.data),
+  providerHealth: () => http.get<ProviderHealth[]>("/api/provider-health").then((r) => r.data),
 
   secrets: () => http.get<SecretsView>("/api/secrets").then((r) => r.data),
   saveSecrets: (s: SecretsUpdate) => http.put<SecretsView>("/api/secrets", s).then((r) => r.data),

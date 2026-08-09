@@ -23,6 +23,13 @@ public sealed class AppSettings
     /// </summary>
     public string ImageFallbackProvider { get; set; } = "";
 
+    /// <summary>
+    /// How long a provider stays benched after reporting its quota exhausted, before the next run
+    /// tries it again. Doubles on each retry that finds it still out, capped at 8 hours. Kept
+    /// short by default because the point is to discover the real reset, not predict it.
+    /// </summary>
+    public int QuotaCooldownMinutes { get; set; } = 60;
+
     public GflowSettings Gflow { get; set; } = new();
 
     /// <summary>Linear gain on the ElevenLabs voice in the final mix (1.25 = +25%).</summary>

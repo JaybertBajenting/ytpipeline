@@ -189,6 +189,10 @@ export function useSaveSettings() {
   });
 }
 
+/** Which providers are quota-benched. Cheap (reads a small state file), so it can poll. */
+export const useProviderHealth = () =>
+  useQuery({ queryKey: ["provider-health"], queryFn: api.providerHealth, refetchInterval: 30000 });
+
 /** Probes `gflow --version`. Manual trigger only — it shells out, so we don't poll it. */
 export function useCheckGflow() {
   return useMutation({ mutationFn: () => api.checkGflow() });

@@ -22,6 +22,7 @@ namespace YtPipeline.Stages.Images;
 public sealed class GflowCliImageGenerator(
     ProcessRunner process,
     SettingsStore settings,
+    ProviderHealthStore health,
     ILogger<GflowCliImageGenerator> logger) : IImageGenerator
 {
     /// <summary>Retries for a single beat before the run gives up.</summary>
@@ -198,9 +199,33 @@ public sealed class GflowCliImageGenerator(
         try
         {
             var result = await process.RunAsync(cfg.Executable, args, ct: timeout.Token);
-            if (!result.Success)
-                logger.LogWarning("gflow exited {Code}: {Err}", result.ExitCode, Trim(result.StdErr));
-            return result.Success;
+            if (result.Success)
+            {
+                // Any success clears a previous benching, so the provider comes straight back
+                // into rotation the moment its quota resets.
+                health.MarkHealthy(ImageProviders.Gflow);
+                return true;
+            }
+
+            var err = Trim(result.StdErr);
+            logger.LogWarning("gflow exited {Code}: {Err}", result.ExitCode, err);
+
+            // Bench it ONLY for quota errors. A CAPTCHA or sign-in failure is fixable, and
+            // silently routing around it would hide a problem worth telling the user about.
+            if (ProviderHealthStore.LooksLikeQuotaExhaustion(err)
+                || ProviderHealthStore.LooksLikeQuotaExhaustion(result.StdOut))
+            {
+                // Logs only on the transition — every concurrent lane reports this, and one line
+                // per failed beat buried the rest of the log.
+                if (health.MarkExhausted(
+                        ImageProviders.Gflow, err, settings.Current.QuotaCooldownMinutes))
+                {
+                    logger.LogWarning(
+                        "gflow reports its daily quota is gone — benching it. The standby provider " +
+                        "takes over, and gflow is retried automatically once the cooldown lapses.");
+                }
+            }
+            return false;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

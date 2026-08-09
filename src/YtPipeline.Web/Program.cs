@@ -105,6 +105,42 @@ app.MapPut("/api/settings", (YtPipeline.Core.Models.AppSettings incoming) =>
     return J(saved);
 });
 
+// Provider health: which image backends are quota-benched and when they'll be retried. Exposed
+// so the automatic switching is visible in the UI rather than looking like magic.
+var healthStore = app.Services.GetRequiredService<YtPipeline.Core.Services.ProviderHealthStore>();
+
+app.MapGet("/api/provider-health", () =>
+{
+    var cfg = settingsStore.Current;
+    return J(new[] { "gflow", "codex" }.Select(p =>
+    {
+        var s = healthStore.Snapshot(p);
+        var until = healthStore.BenchedUntil(p, cfg.QuotaCooldownMinutes);
+        return new
+        {
+            provider = p,
+            preferred = p == cfg.ImageProvider,
+            standby = p == cfg.ImageFallbackProvider,
+            benched = until is not null,
+            benchedUntilUtc = until,
+            retryInMinutes = until is null ? (double?)null
+                : Math.Round((until.Value - DateTime.UtcNow).TotalMinutes, 1),
+            exhaustedUtc = s.ExhaustedUtc,
+            consecutiveProbeFailures = s.ConsecutiveProbeFailures,
+            lastError = s.LastError,
+        };
+    }));
+});
+
+// Clear a provider's benching by hand — for when it's known to be back before the cooldown
+// lapses, or to undo a bad state.
+app.MapDelete("/api/provider-health/{provider}", (string provider) =>
+{
+    healthStore.Reset(provider.ToLowerInvariant());
+    Log.Information("Cleared quota benching for '{Provider}'.", provider);
+    return J(new { cleared = provider });
+});
+
 /// <summary>Reports whether the selected image provider's CLI is actually runnable.</summary>
 app.MapGet("/api/settings/check-gflow", async () =>
 {
