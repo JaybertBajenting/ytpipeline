@@ -107,7 +107,13 @@ export const useRun = (id: string | null, live = false) =>
     queryKey: ["run", id],
     queryFn: () => api.run(id!),
     enabled: !!id,
-    refetchInterval: live ? 2000 : false,
+    // Poll whenever the SERVER says a job is running, not just when this browser started one.
+    // Frame counts and stage state used to sit stale until a manual refresh if the work had been
+    // kicked off from another tab, the CLI, or before a reload.
+    refetchInterval: (q) => {
+      if (q.state.data?.activeJob) return 2500;
+      return live ? 2500 : false;
+    },
   });
 
 /**

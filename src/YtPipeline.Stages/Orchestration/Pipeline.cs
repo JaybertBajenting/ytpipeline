@@ -89,6 +89,15 @@ public sealed class Pipeline(
         // Build a music playlist sized to cover the full video length.
         // Returns empty list (no music) if disabled, library is empty, or selection fails.
         var audioSeconds = Mp3Duration.GetSeconds(run.AudioPath);
+        // ffmpeg writes with -y, so it truncates the previous final.mp4 the moment it starts. If
+        // this attempt then fails, a Done flag left over from an earlier success would point at a
+        // broken file and the UI would call it ready. Clear it up front and let success re-set it.
+        runs.UpdateManifest(run, m =>
+        {
+            m.Stages.Video.Done = false;
+            m.Stages.Video.CompletedUtc = null;
+        });
+
         var musicPaths = await musicSelector.SelectAsync(channel, script, audioSeconds, ct);
 
         var musicNames = musicPaths
@@ -100,8 +109,13 @@ public sealed class Pipeline(
             m.Stages.Video.MarkDone(videoPath);
             if (musicNames.Count > 0) m.Stages.Video.Set("musicTracks", musicNames);
             m.Publish.Title = script.Title;
-            m.Publish.Description = script.Description;
+            // The music libraries require artist + title in the description or the upload can
+            // collect a Content ID claim, so the credit is composed from the tracks actually
+            // mixed in rather than left to be remembered at upload time.
+            m.Publish.Description = MusicCredit.Append(script.Description, musicPaths);
             m.Publish.Tags = script.Tags;
+            if (musicPaths.Count > 0)
+                m.Stages.Video.Set("musicCredits", MusicCredit.Lines(musicPaths));
         });
 
         // Produce the publish thumbnail if we don't already have one.
@@ -138,6 +152,10 @@ public sealed class Pipeline(
         var script = runs.LoadScript(run);
         logger.LogInformation("[5/5] upload — privacy={Privacy}", privacy);
 
+        // Publish with the description the video stage composed — it carries the required music
+        // credit. Falls back to the script's own text for runs assembled before that existed.
+        script.Description = DescriptionForPublish(run, script);
+
         var videoId = await uploader.UploadAsync(run, channel, script, run.VideoPath, privacy, ct);
         runs.UpdateManifest(run, m =>
         {
@@ -169,6 +187,8 @@ public sealed class Pipeline(
 
         var channel = channels.Load(run.Channel);
         var script = runs.LoadScript(run);
+        // Same credit requirement applies off YouTube — Facebook also runs rights matching.
+        script.Description = DescriptionForPublish(run, script);
         logger.LogInformation("publish → {Platform} — {Channel}", publisher.Platform, channel.Name);
 
         var result = await publisher.PublishAsync(run, channel, script, run.VideoPath, ct);
@@ -242,6 +262,17 @@ public sealed class Pipeline(
         if (failures.Count > 0)
             logger.LogWarning("Finished with {Count} failed target(s): {Failures}",
                 failures.Count, string.Join("; ", failures));
+    }
+
+    /// <summary>
+    /// The description to publish with: the one the video stage composed (which includes the
+    /// required music credit), falling back to the script's own text when a run predates it or
+    /// was assembled without music.
+    /// </summary>
+    private string DescriptionForPublish(Run run, ScriptDocument script)
+    {
+        var stored = runs.LoadManifest(run).Publish.Description;
+        return string.IsNullOrWhiteSpace(stored) ? script.Description : stored;
     }
 
     /// <summary>Manifest slot for a platform's status.</summary>

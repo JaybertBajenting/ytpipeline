@@ -13,11 +13,20 @@ import { JobLog } from "./JobLog";
 import { DeleteVideoDialog } from "./DeleteVideoDialog";
 import { cn } from "@/lib/utils";
 
+/** Thumbnails rendered before the "show all" toggle — 90+ at once made the panel crawl. */
+const IMAGE_PREVIEW_COUNT = 12;
+
 export function RunDetail({ runId }: { runId: string }) {
-  const jobId = useUi((s) => s.jobs[runId]) ?? null;
+  const localJobId = useUi((s) => s.jobs[runId]) ?? null;
+  const runQ = useRun(runId, !!localJobId);
+
+  // Trust the SERVER about what's running. A job started from another tab, the CLI, or before a
+  // reload isn't in this browser's store, and treating that as idle is what made counters look
+  // frozen and let disabled-looking buttons fire a second job.
+  const serverJobId = runQ.data?.activeJob?.id ?? null;
+  const jobId = localJobId ?? serverJobId;
   const job = useJob(jobId, runId);
-  const busy = job?.status === "running";
-  const runQ = useRun(runId, busy);           // poll live while a job is running
+  const busy = !!serverJobId || job?.status === "running";           // poll live while a job is running
   const stage = useRunStage(runId);
   const approve = useApprove(runId);
   const cancel = useCancelJob();
@@ -25,6 +34,7 @@ export function RunDetail({ runId }: { runId: string }) {
   const { data: settings } = useSettings();
   const [privacy, setPrivacy] = useState("private");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showAllImages, setShowAllImages] = useState(false);
 
   // Read the provider from settings rather than hardcoding a name — the router resolves it at
   // call time, so a stale label here just makes people doubt their own configuration.
@@ -64,7 +74,7 @@ export function RunDetail({ runId }: { runId: string }) {
   // so the correct card lights up live instead of "script" staying lit the whole time.
   const activeStage: string | null = !busy
     ? null
-    : job!.stage === "auto"
+    : (job?.stage ?? runQ.data?.activeJob?.stage) === "auto"
       ? (!st.script.done ? "script"
         : !st.voice.done ? "voice"
         : !st.images.done ? "images"
@@ -161,6 +171,8 @@ export function RunDetail({ runId }: { runId: string }) {
         {/* 1 — Script */}
         <StageCard
           stageKey="script" num={1} title="Script — Claude Opus 4.8"
+          subtitle={script ? `${script.beats.length} beats · ${script.title}` : undefined}
+          defaultCollapsed={st.script.done}
           done={st.script.done} running={activeStage === "script"}
           actions={
             <Button
@@ -228,7 +240,11 @@ export function RunDetail({ runId }: { runId: string }) {
         <StageCard
           stageKey="voice" num={2} done={st.voice.done}
           running={activeStage === "voice"}
-          title={`Voiceover — ElevenLabs${st.voice.seconds ? ` · ${st.voice.seconds}s` : ""}`}
+          defaultCollapsed={st.voice.done}
+          title="Voiceover — ElevenLabs"
+          subtitle={st.voice.seconds
+            ? `${Math.floor(st.voice.seconds / 60)}:${String(Math.round(st.voice.seconds % 60)).padStart(2, "0")} of narration`
+            : undefined}
           actions={
             <Button disabled={busy || !st.script.done} onClick={() => runStage("voice")}>
               {st.voice.done ? "Re-render voiceover" : "Generate voiceover"}
@@ -246,7 +262,11 @@ export function RunDetail({ runId }: { runId: string }) {
           done={imagesComplete}
           running={activeStage === "images"}
           locked={!sa}
-          title={`Images — ${imageProvider}${images.length ? ` · ${images.length}${expectedFrames ? `/${expectedFrames}` : ""} frames` : ""}`}
+          defaultCollapsed={imagesComplete}
+          title={`Images — ${imageProvider}`}
+          subtitle={images.length
+            ? `${images.length}${expectedFrames ? ` of ${expectedFrames}` : ""} frames`
+            : undefined}
           status={imagesPartial && <Badge tone="warn">{images.length}/{expectedFrames} — incomplete</Badge>}
           actions={
             <>
@@ -300,7 +320,8 @@ export function RunDetail({ runId }: { runId: string }) {
           )}
           {images.length > 0 && (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-2">
-              {images.map((f) => (
+              {/* Capped by default: rendering 90+ full-size PNGs at once made the panel crawl. */}
+              {(showAllImages ? images : images.slice(0, IMAGE_PREVIEW_COUNT)).map((f) => (
                 <figure key={f} className="m-0">
                   <img
                     loading="lazy"
@@ -312,11 +333,23 @@ export function RunDetail({ runId }: { runId: string }) {
               ))}
             </div>
           )}
+          {images.length > IMAGE_PREVIEW_COUNT && (
+            <Button size="sm" variant="subtle" onClick={() => setShowAllImages((v) => !v)}>
+              {showAllImages
+                ? `Show fewer`
+                : `Show all ${images.length} frames`}
+            </Button>
+          )}
         </StageCard>
 
         {/* 4 — Video */}
         <StageCard
-          stageKey="video" num={4} title="Video — FFmpeg" done={st.video.done}
+          stageKey="video" num={4} title="Video — FFmpeg"
+          defaultCollapsed={st.video.done}
+          subtitle={st.video.musicTracks?.length
+            ? `music: ${st.video.musicTracks.join(", ")}`
+            : undefined}
+          done={st.video.done}
           running={activeStage === "video"}
           locked={!videoReady}
           status={st.video.done && (
@@ -359,7 +392,12 @@ export function RunDetail({ runId }: { runId: string }) {
 
         {/* Publish details */}
         {st.video.done && (
-          <StageCard stageKey="publish" num="★" title="Publish details" done={st.upload.done}>
+          <StageCard
+            stageKey="publish" num="★" title="Publish details"
+            subtitle="Title, description and thumbnail sent with the upload"
+            defaultCollapsed
+            done={st.upload.done}
+          >
             <div className="grid grid-cols-1 gap-4 md:grid-cols-[240px_1fr]">
               <div>
                 <div className="mb-2"><SectionLabel>Thumbnail</SectionLabel></div>
@@ -406,6 +444,7 @@ export function RunDetail({ runId }: { runId: string }) {
         {/* 5 — Upload */}
         <StageCard
           stageKey="upload" num={5} title="Upload — YouTube"
+          defaultCollapsed={st.upload.done}
           done={st.upload.done} locked={!va}
           running={activeStage === "upload"}
           status={st.upload.done && st.upload.videoId && (
@@ -490,6 +529,7 @@ function PublishTarget({
       done={status.done}
       running={running}
       locked={locked}
+      defaultCollapsed={status.done}
       status={status.done && status.url && (
         <a
           href={status.url}

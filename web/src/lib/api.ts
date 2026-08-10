@@ -108,6 +108,11 @@ export interface RunDetail {
   /** Files and bytes in the run folder — shown in the delete confirmation. */
   fileCount: number;
   sizeBytes: number;
+  /**
+   * A job running for this run, reported by the server. Non-null regardless of which tab (or the
+   * CLI) started it, which is what lets the UI stay live without a manual refresh.
+   */
+  activeJob: { id: string; stage: string } | null;
 }
 
 export type JobStatus = "running" | "succeeded" | "failed";

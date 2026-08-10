@@ -14,8 +14,13 @@ interface UiState {
   composerOpen: boolean;
   /** Active job id per run, so multiple runs can progress concurrently. */
   jobs: Record<string, string>;
-  /** Stage keys the user collapsed (persists across re-renders). */
+  /**
+   * Explicit user overrides for stage-card open state. Two sets rather than one because each card
+   * has its own sensible default (finished stages start closed, the actionable one starts open),
+   * and a single "collapsed" set couldn't express "the user deliberately opened this".
+   */
   collapsed: Set<string>;
+  expanded: Set<string>;
   /** Sidebar collapsed to icons only. */
   railCollapsed: boolean;
 
@@ -25,7 +30,8 @@ interface UiState {
   setComposerOpen: (open: boolean) => void;
   setJob: (runId: string, jobId: string) => void;
   clearJob: (runId: string) => void;
-  toggleCollapsed: (key: string) => void;
+  /** Flips a card, given what it would do by default when the user hasn't chosen. */
+  toggleCollapsed: (key: string, defaultCollapsed?: boolean) => void;
   toggleRail: () => void;
 }
 
@@ -36,6 +42,7 @@ export const useUi = create<UiState>((set) => ({
   composerOpen: false,
   jobs: {},
   collapsed: new Set<string>(),
+  expanded: new Set<string>(),
   railCollapsed: false,
 
   // Navigating away from a video clears the selection, so returning to Videos lands on
@@ -55,11 +62,18 @@ export const useUi = create<UiState>((set) => ({
       return { jobs: next };
     }),
 
-  toggleCollapsed: (key) =>
+  toggleCollapsed: (key, defaultCollapsed = false) =>
     set((s) => {
-      const next = new Set(s.collapsed);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return { collapsed: next };
+      const isOpen = s.expanded.has(key)
+        ? true
+        : s.collapsed.has(key) ? false : !defaultCollapsed;
+
+      const collapsed = new Set(s.collapsed);
+      const expanded = new Set(s.expanded);
+      // Record the new state in exactly one set so the override is unambiguous.
+      if (isOpen) { expanded.delete(key); collapsed.add(key); }
+      else { collapsed.delete(key); expanded.add(key); }
+      return { collapsed, expanded };
     }),
 
   toggleRail: () => set((s) => ({ railCollapsed: !s.railCollapsed })),

@@ -311,6 +311,9 @@ app.MapGet("/api/runs/{id}", (string id) =>
     var images = ImageSet.List(run.ImagesDir).Select(Path.GetFileName).ToList();
     // Folder size so the delete confirmation can state exactly what would be lost.
     var (fileCount, bytes) = YtPipeline.Core.Services.RunManager.Measure(run.OutputDir);
+    // Report any running job for this run so the UI reflects work started from anywhere —
+    // another tab, the CLI, or a restart — instead of only what this browser launched.
+    var active = jobs.ActiveJobFor(run.RunId);
     return J(new
     {
         manifest,
@@ -321,6 +324,7 @@ app.MapGet("/api/runs/{id}", (string id) =>
         hasThumbnail = File.Exists(run.ThumbnailPath),
         fileCount,
         sizeBytes = bytes,
+        activeJob = active is null ? null : new { id = active.Id, stage = active.Stage },
     });
 });
 
@@ -362,6 +366,17 @@ app.MapPost("/api/script", (CreateScriptRequest req) =>
 app.MapPost("/api/runs/{id}/stage/{stage}", (string id, string stage, string? privacy, bool force = false) =>
 {
     var run = pipeline.Runs.Resolve(id);
+
+    // One job per run. Two stages writing the same folder race on the same files and, for the
+    // image stages, spend quota twice on the same beats.
+    if (jobs.ActiveJobFor(run.RunId) is { } busy)
+        return Results.Conflict(new
+        {
+            error = $"'{busy.Stage}' is already running for this video. Wait for it, or stop it first.",
+            stage = busy.Stage,
+            jobId = busy.Id,
+        });
+
     Func<CancellationToken, Task> work = stage.ToLowerInvariant() switch
     {
         // Retryable: the script is normally generated when the run is created, but if that call

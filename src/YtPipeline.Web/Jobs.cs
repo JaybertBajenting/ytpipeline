@@ -96,9 +96,16 @@ public sealed class JobService
     /// True while any job for this run is still running. Used to refuse destructive actions —
     /// deleting a run's folder mid-stage would leave a half-written run behind.
     /// </summary>
-    public bool HasActiveJobFor(string runId) =>
-        _jobs.Values.Any(j => j.Status == JobStatus.Running
-                              && string.Equals(j.RunId, runId, StringComparison.OrdinalIgnoreCase));
+    public bool HasActiveJobFor(string runId) => ActiveJobFor(runId) is not null;
+
+    /// <summary>
+    /// The running job for this run, if any. Returned to the client so ANY tab can tell that work
+    /// is in progress — job ids used to live only in the browser that started them, so a run
+    /// started elsewhere looked idle and its counters went stale until a manual refresh.
+    /// </summary>
+    public Job? ActiveJobFor(string runId) =>
+        _jobs.Values.FirstOrDefault(j => j.Status == JobStatus.Running
+                                         && string.Equals(j.RunId, runId, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Cancel a running job. Returns false if the job doesn't exist or is already finished.</summary>
     public bool Cancel(string id)

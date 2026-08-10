@@ -21,10 +21,10 @@
     "REFRAME CLOSE + BUTTON (~40-55 words): Say what most people believe the title object is. Correct it - it was never the invention, it is the reward sitting on top of everything beneath it. Then one dry, deadpan closing line about what they will now do with it. Stop there."
   ],
   "visualStyle": "MS Paint stick-figure aesthetic, 16:9, flat solid colors, thick black outlines, big hand-lettered title text, white background",
-  "voiceNotes": "Brisk American narration, roughly 145-155 words per minute. Clipped and matter-of-fact, with a beat of silence before each named payoff word so it lands. Falls at the end of every sentence - statements, never questions. Dry throughout; the single closing joke is delivered completely straight, with no smile in the voice.",
+  "voiceNotes": "Brisk American narration from an older voice - early fifties, warm low baritone with a little dry grain in the bottom of the register. Roughly 145-155 words per minute: the age belongs in the timbre, NOT the tempo, so keep it clipped and matter-of-fact rather than slow and ponderous. A beat of silence before each named payoff word so it lands. Falls at the end of every sentence - statements, never questions. Deadpan and unimpressed throughout; the single closing joke is delivered completely straight, with no smile in the voice.",
   "voice": {
     "voiceId": "",
-    "voiceName": "American deadpan narrator",
+    "voiceName": "American deadpan narrator (early 50s)",
     "modelId": "",
     "stability": 0.5,
     "similarityBoost": 0.75
