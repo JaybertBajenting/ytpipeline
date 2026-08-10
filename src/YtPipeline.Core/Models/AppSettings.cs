@@ -30,6 +30,15 @@ public sealed class AppSettings
     /// </summary>
     public int QuotaCooldownMinutes { get; set; } = 60;
 
+    /// <summary>
+    /// Speaking rate assumed for a channel whose voice hasn't been measured yet, in words per
+    /// minute. Only a starting point: once a channel voices a video, its own observed rate is
+    /// recorded and wins, because how fast a voice reads is a fact about that voice rather than a
+    /// setting. Raising this does NOT make a slow voice talk faster — it just asks for more words,
+    /// which makes longer videos.
+    /// </summary>
+    public double DefaultWordsPerMinute { get; set; } = 215;
+
     public GflowSettings Gflow { get; set; } = new();
 
     /// <summary>Linear gain on the ElevenLabs voice in the final mix (1.25 = +25%).</summary>

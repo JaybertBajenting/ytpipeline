@@ -73,6 +73,7 @@ public sealed class SettingsStore
         if (s.ImageFallbackProvider == s.ImageProvider) s.ImageFallbackProvider = "";
 
         s.QuotaCooldownMinutes = Math.Clamp(s.QuotaCooldownMinutes, 5, 24 * 60);
+        s.DefaultWordsPerMinute = Math.Clamp(s.DefaultWordsPerMinute, 60, 320);
         s.VoiceGain = Math.Clamp(s.VoiceGain, 0.1, 4.0);
         s.MusicVolume = Math.Clamp(s.MusicVolume, 0.0, 1.0);
         s.Gflow ??= new GflowSettings();

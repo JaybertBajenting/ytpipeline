@@ -28,9 +28,13 @@ public sealed class ClaudeCliScriptGenerator(
     ProcessRunner process,
     IValidator<ScriptDocument> validator,
     ClaudeOptions options,
+    SettingsStore settings,
     ILogger<ClaudeCliScriptGenerator> logger) : IScriptGenerator
 {
-    /// <summary>Typical voiceover pace, used to convert target minutes into a word range.</summary>
+    /// <summary>
+    /// Last-resort pace when neither the channel nor settings offer anything, used only to convert
+    /// target minutes into a word range.
+    /// </summary>
     private const int WordsPerMinuteLow = 130;
     private const int WordsPerMinuteHigh = 150;
 
@@ -63,7 +67,7 @@ public sealed class ClaudeCliScriptGenerator(
         /// <summary>Upper-bound beat estimate — what the image stage would actually have to make.</summary>
         public int ApproxBeatsMax => Max / 6;
 
-        public static WordTarget For(Channel channel)
+        public static WordTarget For(Channel channel, double defaultWpm = WordsPerMinuteLow)
         {
             // Guard against missing or nonsensical channel values: a 0 would ask Claude for a
             // zero-word script, and an absurdly high one would burn a whole day of images.
@@ -88,8 +92,10 @@ public sealed class ClaudeCliScriptGenerator(
             }
             else
             {
-                min = lo * WordsPerMinuteLow;
-                max = hi * WordsPerMinuteHigh;
+                // Never measured this voice — use the configured starting assumption.
+                var wpm = Math.Clamp(defaultWpm, 60, 320);
+                min = (int)(lo * wpm);
+                max = (int)(hi * wpm * 1.05);
             }
 
             return new WordTarget(lo, hi, min, max, (int)(min * 0.92));
@@ -98,7 +104,7 @@ public sealed class ClaudeCliScriptGenerator(
 
     public async Task<ScriptDocument> GenerateAsync(Channel channel, string topic, CancellationToken ct)
     {
-        var target = WordTarget.For(channel);
+        var target = WordTarget.For(channel, settings.Current.DefaultWordsPerMinute);
         logger.LogInformation(
             "Script target for '{Channel}': {Minutes} → {Min}–{Max} words (~{Beats}-{BeatsMax} beats).",
             channel.Id, target.MinutesLabel, target.Min, target.Max,
