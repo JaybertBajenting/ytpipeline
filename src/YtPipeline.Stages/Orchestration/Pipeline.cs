@@ -76,6 +76,71 @@ public sealed class Pipeline(
             m.Stages.Voice.MarkDone(audioPath);
             m.Stages.Voice.Set("seconds", Math.Round(seconds, 1));
         });
+
+        CalibrateSpeakingRate(channel, script, seconds);
+    }
+
+    /// <summary>
+    /// Learns this channel's real speaking rate from the audio just produced, and warns when the
+    /// result missed the requested runtime.
+    /// </summary>
+    /// <remarks>
+    /// The word-count target can only size a video correctly if it knows how fast the voice talks,
+    /// and that varies enormously between voices — 112 and 215 wpm on two real channels here. So
+    /// the observed rate is written back to the channel and used to budget the next script.
+    /// New readings are blended with the old so one unusual script can't swing the estimate.
+    /// </remarks>
+    private void CalibrateSpeakingRate(Channel channel, ScriptDocument script, double seconds)
+    {
+        if (seconds < 5) return;   // too short to measure anything meaningful
+
+        var words = script.NarrationForVoice()
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
+        if (words < 50) return;
+
+        var observed = words / (seconds / 60.0);
+        if (observed is < 60 or > 320)
+        {
+            logger.LogWarning("Ignoring implausible speaking rate of {Wpm:F0} wpm.", observed);
+            return;
+        }
+
+        var previous = channel.Voice?.WordsPerMinute;
+        var blended = previous is { } p ? (p * 0.5) + (observed * 0.5) : observed;
+
+        // Did we actually land inside the requested window?
+        var minutes = seconds / 60.0;
+        var lo = channel.VideoLengthMinMinutes > 0 ? channel.VideoLengthMinMinutes : channel.VideoLengthTargetMinutes;
+        var hi = channel.VideoLengthMaxMinutes > 0 ? channel.VideoLengthMaxMinutes : lo;
+        if (minutes < lo * 0.95 || minutes > hi * 1.05)
+        {
+            logger.LogWarning(
+                "Voiceover is {Mins:F1} min, outside this channel's {Lo}-{Hi} min target. " +
+                "The voice reads at {Observed:F0} wpm ({Words} words). Recorded that rate — the " +
+                "next script for '{Channel}' will be sized for it.",
+                minutes, lo, hi, observed, words, channel.Id);
+        }
+        else
+        {
+            logger.LogInformation(
+                "Voiceover {Mins:F1} min, within the {Lo}-{Hi} min target ({Observed:F0} wpm).",
+                minutes, lo, hi, observed);
+        }
+
+        try
+        {
+            channel.Voice ??= new ChannelVoice();
+            channel.Voice.WordsPerMinute = Math.Round(blended, 1);
+            channels.Save(channel.Id, channel);
+            logger.LogInformation(
+                "Speaking rate for '{Channel}' calibrated to {Wpm:F0} wpm{From}.",
+                channel.Id, blended, previous is { } q ? $" (was {q:F0})" : "");
+        }
+        catch (Exception ex)
+        {
+            // Calibration is an optimisation — never fail a finished voiceover over it.
+            logger.LogWarning(ex, "Could not save the calibrated speaking rate.");
+        }
     }
 
     // ----- Stage 4 -----------------------------------------------------------

@@ -24,7 +24,8 @@
     "voiceName": "British RP documentary narrator",
     "modelId": "eleven_v3",
     "stability": 0.55,
-    "similarityBoost": 0.8
+    "similarityBoost": 0.8,
+    "wordsPerMinute": 112.0
   },
   "music": true,
   "youtube": {

@@ -75,8 +75,23 @@ public sealed class ClaudeCliScriptGenerator(
                 channel.VideoLengthMaxMinutes > 0 ? channel.VideoLengthMaxMinutes : lo, 1, 30);
             if (hi < lo) hi = lo;
 
-            var min = lo * WordsPerMinuteLow;
-            var max = hi * WordsPerMinuteHigh;
+            // Prefer the rate actually measured for this channel's voice. The 130-150 band is a
+            // fallback for a voice that hasn't been heard yet — it was the whole cause of a
+            // 3-minute target producing a 2-minute video on a 215 wpm voice.
+            int min, max;
+            if (channel.Voice?.WordsPerMinute is { } measured && measured >= 60 && measured <= 320)
+            {
+                // A single measured rate, with a small band so the script isn't asked to hit an
+                // exact word count.
+                min = (int)(lo * measured * 1.00);
+                max = (int)(hi * measured * 1.05);
+            }
+            else
+            {
+                min = lo * WordsPerMinuteLow;
+                max = hi * WordsPerMinuteHigh;
+            }
+
             return new WordTarget(lo, hi, min, max, (int)(min * 0.92));
         }
     }

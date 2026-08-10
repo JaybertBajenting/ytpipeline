@@ -89,6 +89,18 @@ public sealed class ChannelVoice
 
     /// <summary>0–1. Null = global default.</summary>
     public double? SimilarityBoost { get; set; }
+
+    /// <summary>
+    /// Measured speaking rate for THIS voice, in words per minute, learned from finished runs.
+    /// <para>
+    /// Speaking rate is a property of the voice, not a constant: two real voices on this project
+    /// came in at 112 and 215 wpm — nearly 2x apart. A fixed assumption therefore cannot size a
+    /// script for both, and using one produced a 2-minute video from a 3-minute target. The voice
+    /// stage writes the observed rate back here so the next script is budgeted from evidence.
+    /// Null until the first run with this voice completes.
+    /// </para>
+    /// </summary>
+    public double? WordsPerMinute { get; set; }
 }
 
 public sealed class YoutubeDefaults
