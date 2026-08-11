@@ -184,6 +184,60 @@ public sealed class ClaudeCliScriptGenerator(
         return script;
     }
 
+    /// <summary>
+    /// Writes the channel's identity and its chosen structure into the prompt.
+    /// </summary>
+    /// <remarks>
+    /// Sections are handed over as guidance to adapt, not a checklist to satisfy. A rigid reading
+    /// forces every topic through every section — a template with a metallurgy step would give a
+    /// video about weaving leaves a furnace it has no use for.
+    /// </remarks>
+    private static void AppendChannelContext(StringBuilder sb, Channel channel)
+    {
+        var identity = new (string Label, string? Value)[]
+        {
+            ("Voice and persona", channel.Persona),
+            ("Tone", channel.Tone),
+            ("Audience", channel.Audience),
+            ("Delivery notes", channel.VoiceNotes),
+        }.Where(p => !string.IsNullOrWhiteSpace(p.Value)).ToList();
+
+        if (identity.Count > 0)
+        {
+            sb.AppendLine("=== CHANNEL VOICE (write as though this channel is speaking) ===");
+            foreach (var (label, value) in identity) sb.AppendLine($"- {label}: {value!.Trim()}");
+            sb.AppendLine();
+        }
+
+        var sections = SelectStructure(channel);
+        if (sections.Count == 0) return;
+
+        sb.AppendLine("=== STRUCTURE (follow this shape) ===");
+        sb.AppendLine("Sections in order. Word budgets are per section and should roughly hold, since");
+        sb.AppendLine("together they add up to the total above. Any section that genuinely does not fit");
+        sb.AppendLine("this topic should be adapted to the topic's own equivalent, or dropped — do NOT");
+        sb.AppendLine("invent content just to fill a section that makes no sense here, and redistribute");
+        sb.AppendLine("its words across the sections you keep.");
+        sb.AppendLine();
+        foreach (var s in sections) sb.AppendLine(s.Trim()).AppendLine();
+    }
+
+    /// <summary>
+    /// The structure to write to: the least recently used template if the channel has any,
+    /// otherwise its single <see cref="Channel.ScriptStructure"/>.
+    /// </summary>
+    public static IReadOnlyList<string> SelectStructure(Channel channel) =>
+        PickTemplate(channel)?.Sections ?? (IReadOnlyList<string>)channel.ScriptStructure;
+
+    /// <summary>
+    /// Least-recently-used template, so consecutive videos aren't built to the same skeleton.
+    /// Never-used templates come first, so a newly added one is tried before anything repeats.
+    /// </summary>
+    public static ScriptTemplate? PickTemplate(Channel channel) =>
+        channel.ScriptTemplates is { Count: > 0 } list
+            ? list.OrderBy(t => t.LastUsedUtc ?? DateTime.MinValue).First()
+            : null;
+
     /// <summary>Extracts JSON from raw Claude output, parses and validates it.</summary>
     private async Task<ScriptDocument> ExtractAndValidate(string raw, CancellationToken ct)
     {
@@ -210,10 +264,17 @@ public sealed class ClaudeCliScriptGenerator(
         sb.AppendLine($"Do NOT overshoot either: staying under {target.Max} words matters just as much, because every beat becomes a generated image.");
         sb.AppendLine();
 
-        sb.AppendLine("Write a script for a YouTube video. No persona, no host character, no channel branding, no narrator name — just a clear, engaging, well-paced spoken script about the topic itself.");
+        sb.AppendLine("Write the spoken narration for a YouTube video on the channel described below.");
+        sb.AppendLine("Do NOT name the channel, invent a host name, or address the audience as subscribers —");
+        sb.AppendLine("the channel context is there to set voice and structure, not to be mentioned aloud.");
         sb.AppendLine();
         sb.AppendLine($"TOPIC: {topic}");
         sb.AppendLine();
+
+        // The channel's identity and format used to be collected here and then never sent, so every
+        // channel produced the same generic explainer regardless of how carefully it was configured.
+        AppendChannelContext(sb, channel);
+
         sb.AppendLine("Requirements:");
         sb.AppendLine($"- LENGTH (MANDATORY — scripts under {target.Floor} words will be rejected): the narration must total {target.Min}–{target.Max} spoken words. Do NOT write a short script. Expand every section with detail, examples, context, and explanation until you hit the word count.");
         sb.AppendLine($"- PACING (CRITICAL — this must be a FAST-paced edit): break the narration into VERY short beats. Each beat should be only about 1.5 to 2.5 seconds of speech — roughly 4 to 9 spoken words, i.e. a single short phrase, NOT a whole sentence. NEVER let a beat exceed ~10 words. Split long sentences into several beats at natural pause points (commas, conjunctions, clauses). There is exactly one image per beat, so the more beats you make, the more the visuals change — aim for a brand-new visual every couple of seconds. A {target.Min}–{target.Max} word script should therefore have roughly {target.ApproxBeats}-{target.ApproxBeatsMax} beats.");

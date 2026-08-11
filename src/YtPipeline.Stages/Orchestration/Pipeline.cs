@@ -35,12 +35,39 @@ public sealed class Pipeline(
         var channel = channels.Load(run.Channel);
         logger.LogInformation("[1/5] script — {Channel}: {Topic}", channel.Name, run.Topic);
 
+        // Which skeleton this video is being written to, captured BEFORE generation so the run
+        // records what it was actually built from even if a later run rotates onward.
+        var template = ClaudeCliScriptGenerator.PickTemplate(channel);
+        if (template is not null)
+            logger.LogInformation("Script template: '{Name}' ({Count} of {Total} available).",
+                template.Name, 1, channel.ScriptTemplates.Count);
+
         var script = await scriptGen.GenerateAsync(channel, run.Topic, ct);
         // Respell TTS-risky words (names, places, foreign/scientific terms) before the voice stage,
         // so ElevenLabs pronounces them right on its single call — no audio re-generation, no credits.
         await phonetics.ApplyAsync(script, ct);
         runs.SaveScript(run, script);
-        runs.UpdateManifest(run, m => m.Stages.Script.MarkDone(run.ScriptPath));
+        runs.UpdateManifest(run, m =>
+        {
+            m.Stages.Script.MarkDone(run.ScriptPath);
+            if (template is not null) m.Stages.Script.Set("template", template.Name);
+        });
+
+        // Stamp the template as used so the next video rotates to a different one. Done after a
+        // successful generation, so a failed run doesn't burn a slot in the rotation.
+        if (template is not null)
+        {
+            try
+            {
+                template.LastUsedUtc = DateTime.UtcNow;
+                channels.Save(channel.Id, channel);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Could not record template usage — rotation may repeat.");
+            }
+        }
+
         return script;
     }
 

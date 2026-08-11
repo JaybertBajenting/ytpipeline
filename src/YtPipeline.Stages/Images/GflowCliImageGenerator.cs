@@ -134,10 +134,13 @@ public sealed class GflowCliImageGenerator(
         var cfg = settings.Current.Gflow;
 
         var prompt = new StringBuilder()
-            .AppendLine(StyleRule(channel).TrimEnd())
+            .AppendLine(ThumbnailRule(channel).TrimEnd())
             .AppendLine()
+            .AppendLine("=== FOR THIS TITLE ===")
             .AppendLine($"YouTube thumbnail for a video titled \"{script.Title}\".")
-            .AppendLine("Single clear focal subject, bold short text, strong contrast, minimal clutter, readable at small sizes.")
+            .AppendLine("Choose the ONE composition from the rule above that fits this title. Decide what the")
+            .AppendLine("everyday object is and what the consequence or goal is, then draw only those. Do not")
+            .AppendLine("write the title out — the picture is the hook.")
             .Append("Horizontal 16:9.")
             .ToString();
 
@@ -270,6 +273,15 @@ public sealed class GflowCliImageGenerator(
 
         return sb.ToString();
     }
+
+    /// <summary>
+    /// Thumbnail rule, falling back to the frame rule when a channel has none. Kept separate from
+    /// <see cref="StyleRule"/> because a thumbnail has a different job from a frame.
+    /// </summary>
+    private static string ThumbnailRule(Channel channel) =>
+        !string.IsNullOrWhiteSpace(channel.ThumbnailInstructions)
+            ? channel.ThumbnailInstructions
+            : StyleRule(channel);
 
     private static string StyleRule(Channel channel) =>
         !string.IsNullOrWhiteSpace(channel.ImageInstructions)

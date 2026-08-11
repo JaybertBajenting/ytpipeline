@@ -32,7 +32,17 @@ public sealed class Channel
     /// a spread (e.g. 3-5) gives the script room without letting the image count run away.
     /// </summary>
     public int VideoLengthMaxMinutes { get; set; }
+    /// <summary>
+    /// Fallback structure, used when <see cref="ScriptTemplates"/> is empty.
+    /// </summary>
     public List<string> ScriptStructure { get; set; } = new();
+
+    /// <summary>
+    /// Named alternative structures for this channel, rotated across videos so consecutive
+    /// uploads aren't built to an identical skeleton. The script stage picks the least recently
+    /// used one and records the choice on the run.
+    /// </summary>
+    public List<ScriptTemplate> ScriptTemplates { get; set; } = new();
     public string VisualStyle { get; set; } = "";
     public string VoiceNotes { get; set; } = "";
 
@@ -67,6 +77,16 @@ public sealed class Channel
     /// </summary>
     [JsonIgnore]
     public string ImageRuleSource { get; set; } = "none";
+
+    /// <summary>
+    /// Thumbnail rule, from <c>&lt;id&gt;.thumbnail.md</c> or the shared
+    /// <c>_default.thumbnail.md</c>. Separate from <see cref="ImageInstructions"/> because a
+    /// thumbnail has a different job from a frame — frames explain a line of narration, thumbnails
+    /// have to land one idea at feed size — and reusing the frame rule produced frames-as-covers.
+    /// Empty falls back to the image rule.
+    /// </summary>
+    [JsonIgnore]
+    public string ThumbnailInstructions { get; set; } = "";
 }
 
 /// <summary>
@@ -101,6 +121,22 @@ public sealed class ChannelVoice
     /// </para>
     /// </summary>
     public double? WordsPerMinute { get; set; }
+}
+
+/// <summary>
+/// One alternative script skeleton for a channel. The <see cref="Sections"/> list has the same
+/// shape and meaning as <see cref="Channel.ScriptStructure"/> — a standing rules block followed
+/// by ordered sections with word budgets.
+/// </summary>
+public sealed class ScriptTemplate
+{
+    /// <summary>Short label, used for rotation bookkeeping and shown on the run.</summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>When this template was last used, so rotation can pick the stalest one.</summary>
+    public DateTime? LastUsedUtc { get; set; }
+
+    public List<string> Sections { get; set; } = new();
 }
 
 public sealed class YoutubeDefaults

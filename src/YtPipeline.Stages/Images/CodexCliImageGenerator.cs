@@ -169,27 +169,28 @@ public sealed class CodexCliImageGenerator(
 
     public string BuildThumbnailPrompt(Run run, ScriptDocument script, Channel channel)
     {
-        // Use the SAME art-style rule the frames use so the thumbnail is visually consistent
-        // with the video's images (same medium, palette, linework, title-text treatment).
-        var rule = !string.IsNullOrWhiteSpace(channel.ImageInstructions)
-            ? channel.ImageInstructions
-            : !string.IsNullOrWhiteSpace(channel.VisualStyle)
-                ? $"Draw in this style: {channel.VisualStyle}."
-                : "simple, bold, high-contrast";
+        // A thumbnail gets the THUMBNAIL rule, not the frame rule. Reusing the frame rule made
+        // covers that looked like a random frame from the video — explanatory rather than
+        // arresting. Falls back to the frame rule only if no thumbnail rule exists.
+        var rule = !string.IsNullOrWhiteSpace(channel.ThumbnailInstructions)
+            ? channel.ThumbnailInstructions
+            : !string.IsNullOrWhiteSpace(channel.ImageInstructions)
+                ? channel.ImageInstructions
+                : !string.IsNullOrWhiteSpace(channel.VisualStyle)
+                    ? $"Draw in this style: {channel.VisualStyle}."
+                    : "simple, bold, high-contrast";
 
         var sb = new StringBuilder();
         sb.AppendLine("Create ONE YouTube thumbnail image.");
         sb.AppendLine($"Video title: \"{script.Title}\"");
         sb.AppendLine();
-        sb.AppendLine("=== ART STYLE (MUST MATCH THE VIDEO'S IMAGES EXACTLY) ===");
-        sb.AppendLine("Use the SAME visual style as the frames in this video — same medium, palette, linework,");
-        sb.AppendLine("background texture and title-text treatment — so the thumbnail looks like it belongs to the");
-        sb.AppendLine("same set. Follow these style rules:");
+        sb.AppendLine("=== THUMBNAIL RULE (FOLLOW EXACTLY) ===");
         sb.AppendLine(rule.TrimEnd());
         sb.AppendLine();
-        sb.AppendLine("=== THUMBNAIL REQUIREMENTS ===");
-        sb.AppendLine("Within that style, it must be eye-catching and readable at small sizes: a single clear focal");
-        sb.AppendLine("subject, bold short text (a few words max drawn from the title), strong contrast, minimal clutter.");
+        sb.AppendLine("=== FOR THIS TITLE ===");
+        sb.AppendLine("Read the title above and choose the ONE composition from the rule that fits it. Decide what");
+        sb.AppendLine("the everyday object is, and what the consequence or goal is, then draw only those. Do not");
+        sb.AppendLine("write the title out — the picture is the hook.");
         sb.AppendLine("Horizontal 16:9, 1280x720.");
         sb.AppendLine();
         sb.AppendLine("You MUST create this image with your native image_generation tool. Do NOT draw or synthesize it with");

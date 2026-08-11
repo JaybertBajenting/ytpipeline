@@ -35,6 +35,12 @@ public sealed class ChannelLoader
             channel.ImageRuleSource = "default";
         }
 
+        // Thumbnail rule: per-channel override, else the shared default.
+        var thumbRule = Path.Combine(_channelsDir, channelId + ".thumbnail.md");
+        var thumbDefault = Path.Combine(_channelsDir, "_default.thumbnail.md");
+        if (File.Exists(thumbRule)) channel.ThumbnailInstructions = File.ReadAllText(thumbRule);
+        else if (File.Exists(thumbDefault)) channel.ThumbnailInstructions = File.ReadAllText(thumbDefault);
+
         return channel;
     }
 
@@ -147,6 +153,17 @@ public sealed class ChannelLoader
         c.Youtube ??= new YoutubeDefaults();
         c.ScriptStructure ??= new List<string>();
         c.ScriptStructure.RemoveAll(string.IsNullOrWhiteSpace);
+
+        c.ScriptTemplates ??= new List<ScriptTemplate>();
+        foreach (var t in c.ScriptTemplates)
+        {
+            t.Sections ??= new List<string>();
+            t.Sections.RemoveAll(string.IsNullOrWhiteSpace);
+            if (string.IsNullOrWhiteSpace(t.Name)) t.Name = "unnamed";
+        }
+        // A template with no sections would produce an unguided script, which is worse than the
+        // fallback structure — drop it rather than let rotation land on it.
+        c.ScriptTemplates.RemoveAll(t => t.Sections.Count == 0);
     }
 
     /// <summary>Lists channel ids available in the channels directory.</summary>
