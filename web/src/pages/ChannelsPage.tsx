@@ -1,19 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import {
-  ArrowLeft, Camera, Clock, Image as ImageIcon, MonitorPlay, Music, Plus, RotateCcw, Save,
-  ThumbsUp, Trash2, Tv, Volume2, X,
+  ArrowLeft, BadgeCheck, Camera, Clock, Download, Image as ImageIcon, Link2, MonitorPlay, Music,
+  Plus, RotateCcw, Save, Sparkles, ThumbsUp, Trash2, Tv, Volume2, X,
 } from "lucide-react";
 import {
-  lengthBudget, newChannelTemplate, WPM_HIGH, WPM_LOW,
-  type Channel, type ChannelPublishUpdate, type ChannelPublishView,
+  api, BIO_MAX_CHARS, emptyIdentity, lengthBudget, newChannelTemplate, WPM_HIGH, WPM_LOW,
+  type Channel, type ChannelIdentity, type ChannelPublishUpdate, type ChannelPublishView,
 } from "@/lib/api";
 import {
-  useChannelPublish, useChannels, useCreateChannel, useDeleteChannel, useRuns,
-  useSaveChannel, useSaveChannelPublish,
+  useBrandImage, useChannelPublish, useChannels, useCreateChannel, useDeleteChannel,
+  useGenerateIdentity, useRuns, useSaveChannel, useSaveChannelPublish, type BrandKind,
 } from "@/lib/hooks";
 import {
   Badge, Button, Callout, Card, CardHead, ConfirmModal, EmptyState, Field, Input, Modal,
-  PageHead, SectionLabel, SecretInput, Select, Skeleton, Slider, Switch, Textarea, Toast,
+  PageHead, SectionLabel, SecretInput, Select, Skeleton, Slider, Spinner, Switch, Textarea, Toast,
   inputCls,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -349,6 +349,10 @@ function ChannelEditor({ channel, onBack }: { channel: Channel; onBack: () => vo
     setDraft((d) => ({ ...d, voice: { ...d.voice, ...patch } }));
   const setYt = (patch: Partial<Channel["youtube"]>) =>
     setDraft((d) => ({ ...d, youtube: { ...d.youtube, ...patch } }));
+  // Channel files written before the branding section existed have no `identity` key at all, so
+  // the blank shape is merged under whatever is there rather than spreading undefined.
+  const setIdentity = (patch: Partial<ChannelIdentity>) =>
+    setDraft((d) => ({ ...d, identity: { ...emptyIdentity(), ...d.identity, ...patch } }));
   const setPubField = (patch: Partial<ChannelPublishUpdate>) =>
     setPub((p) => (p ? { ...p, ...patch } : p));
 
@@ -581,6 +585,13 @@ function ChannelEditor({ channel, onBack }: { channel: Channel; onBack: () => vo
           </div>
         </Card>
 
+        {/* ── Channel branding ──────────────────────────────────────────── */}
+        <ChannelBranding
+          channel={draft}
+          identity={{ ...emptyIdentity(), ...draft.identity }}
+          onChange={setIdentity}
+        />
+
         {/* ── Publish destinations ──────────────────────────────────────── */}
         <Card className="lg:col-span-2">
           <CardHead
@@ -757,5 +768,258 @@ function ChannelEditor({ channel, onBack }: { channel: Channel; onBack: () => vo
 
       <Toast show={toast}>Channel saved — next run uses these settings.</Toast>
     </>
+  );
+}
+
+/**
+ * How the CHANNEL presents on YouTube, as opposed to how its videos are written — that's the
+ * Identity card. Everything here is a reference sheet: the art is generated and downloadable, the
+ * text is copyable, and nothing is pushed to YouTube.
+ */
+function ChannelBranding({
+  channel, identity, onChange,
+}: {
+  channel: Channel;
+  identity: ChannelIdentity;
+  onChange: (patch: Partial<ChannelIdentity>) => void;
+}) {
+  const brand = useBrandImage(channel.id);
+  const write = useGenerateIdentity(channel.id);
+  const bioId = useId();
+  const bioLeft = BIO_MAX_CHARS - identity.bio.length;
+
+  async function writeIdentity() {
+    const w = await write.mutateAsync();
+    onChange({
+      bio: w.bio,
+      byline: w.byline,
+      keywords: w.keywords,
+      // A handle may already be claimed on YouTube, and overwriting one you've registered is
+      // actively harmful — so it is only ever filled in when the box is empty.
+      ...(identity.handle.trim() ? {} : { handle: w.handle }),
+    });
+  }
+
+  return (
+    <Card className="lg:col-span-2">
+      <CardHead
+        title="Channel branding"
+        desc="The channel's own identity on YouTube. Generated and kept here for you to set Studio up by hand — nothing is uploaded automatically."
+        icon={<BadgeCheck className="size-3.5" />}
+      />
+      <div className="space-y-5 p-4">
+        <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
+          <BrandArt kind="avatar" channel={channel} brand={brand} />
+          <BrandArt kind="banner" channel={channel} brand={brand} />
+        </div>
+
+        {brand.job?.status === "failed" && brand.job.error && (
+          <Callout tone="err" title="Generation failed">{brand.job.error}</Callout>
+        )}
+
+        <div className="grid gap-3.5 md:grid-cols-2">
+          <Input
+            label="Handle"
+            placeholder="theprimitiveengineer"
+            value={identity.handle}
+            onChange={(e) => onChange({ handle: e.target.value.replace(/^@+/, "") })}
+            hint="Without the @. YouTube allows 3-30 characters: letters, numbers, dots, dashes, underscores."
+          />
+          <Input
+            label="Byline"
+            placeholder={channel.tagline || "One line under the channel name"}
+            value={identity.byline}
+            onChange={(e) => onChange({ byline: e.target.value })}
+            hint="Falls back to the channel's tagline when left empty."
+          />
+        </div>
+
+        {/* Laid out by hand rather than with <Textarea> so the Write button can sit on the label
+            row — a <button> nested inside the <label> that Field renders would be invalid. */}
+        <div>
+          <div className="mb-1.5 flex items-center gap-2">
+            <label htmlFor={bioId} className="text-xs font-medium text-white/55">About</label>
+            <span className={cn(
+              "text-[10px] tabular-nums",
+              bioLeft < 0 ? "text-red-400" : bioLeft < 100 ? "text-amber-400" : "text-white/25",
+            )}>
+              {identity.bio.length}/{BIO_MAX_CHARS}
+            </span>
+            <div className="flex-1" />
+            <Button
+              size="xs" variant="subtle"
+              loading={write.isPending}
+              title="Writes the About text, byline and keywords from this channel's persona and tone"
+              onClick={writeIdentity}
+            >
+              <Sparkles className="size-3" /> {write.isPending ? "Writing…" : "Write with Claude"}
+            </Button>
+          </div>
+          <textarea
+            id={bioId}
+            rows={6}
+            className={cn(inputCls, "resize-y leading-relaxed")}
+            value={identity.bio}
+            onChange={(e) => onChange({ bio: e.target.value })}
+          />
+          <p className="mt-1.5 text-[11px] leading-relaxed text-white/30">
+            The channel description on the About tab. <strong>Write with Claude</strong> fills this,
+            the byline and the keywords from the channel's persona and tone
+            {identity.handle.trim() ? "" : ", and suggests a handle"} — nothing is saved until you
+            press Save.
+          </p>
+        </div>
+        {write.error && (
+          <Callout tone="err" title="Couldn't write the identity">
+            {(write.error as Error).message}
+          </Callout>
+        )}
+        {bioLeft < 0 && (
+          <Callout tone="err" title="Too long for YouTube">
+            YouTube rejects a channel description over {BIO_MAX_CHARS} characters. Trim{" "}
+            {Math.abs(bioLeft)} more.
+          </Callout>
+        )}
+
+        <Input
+          label="Keywords"
+          placeholder="engineering, history of technology, from scratch"
+          value={identity.keywords.join(", ")}
+          onChange={(e) => onChange({
+            keywords: e.target.value.split(",").map((k) => k.trim()).filter(Boolean),
+          })}
+          hint="Comma separated. Studio → Settings → Channel → Basic info."
+        />
+
+        <div>
+          <div className="mb-2 flex items-center gap-1.5">
+            <Link2 className="size-3.5 text-white/40" />
+            <SectionLabel>Links</SectionLabel>
+          </div>
+          <div className="space-y-2">
+            {identity.links.map((link, i) => (
+              <div key={i} className="flex gap-2">
+                <input
+                  className={cn(inputCls, "w-40 shrink-0 py-1.5 text-xs")}
+                  placeholder="Label"
+                  value={link.label}
+                  onChange={(e) => {
+                    const next = [...identity.links];
+                    next[i] = { ...next[i], label: e.target.value };
+                    onChange({ links: next });
+                  }}
+                />
+                <input
+                  className={cn(inputCls, "flex-1 py-1.5 font-mono text-xs")}
+                  placeholder="https://"
+                  value={link.url}
+                  onChange={(e) => {
+                    const next = [...identity.links];
+                    next[i] = { ...next[i], url: e.target.value };
+                    onChange({ links: next });
+                  }}
+                />
+                <button
+                  title="Remove link"
+                  className="shrink-0 rounded-md px-2 text-white/25 transition-colors hover:bg-red-500/15 hover:text-red-300"
+                  onClick={() => onChange({ links: identity.links.filter((_, j) => j !== i) })}
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            ))}
+            <Button
+              size="sm" variant="subtle"
+              onClick={() => onChange({ links: [...identity.links, { label: "", url: "" }] })}
+            >
+              <Plus className="size-3" /> Add link
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * One piece of channel art, previewed in the shape YouTube actually crops to — a circle for the
+ * avatar, and the phone-width safe area marked on the banner, because a banner that looks fine as
+ * a rectangle routinely loses its subject on a phone.
+ */
+function BrandArt({
+  kind, channel, brand,
+}: {
+  kind: BrandKind;
+  channel: Channel;
+  brand: ReturnType<typeof useBrandImage>;
+}) {
+  const isAvatar = kind === "avatar";
+  const exists = isAvatar ? channel.hasAvatar : channel.hasBanner;
+  const busy = brand.running !== null;
+  const mine = brand.running === kind;
+  // The png is overwritten in place, so the preview needs a URL that changes when it is rebuilt.
+  const src = api.brandUrl(channel.id, kind, brand.job?.status === "succeeded" ? brand.job.id : undefined);
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-2">
+        <SectionLabel>{isAvatar ? "Profile picture" : "Cover photo"}</SectionLabel>
+        <span className="text-[10px] text-white/25">{isAvatar ? "800×800" : "2048×1152"}</span>
+      </div>
+
+      <div className={cn(
+        "relative overflow-hidden border border-white/[0.07] bg-black/30",
+        isAvatar ? "aspect-square w-40 rounded-full" : "aspect-[16/9] w-full rounded-lg",
+      )}>
+        {exists ? (
+          <img key={src} src={src} alt="" className="size-full object-cover" />
+        ) : (
+          <div className="grid size-full place-items-center text-[11px] text-white/25">
+            {mine ? <Spinner /> : "Not generated yet"}
+          </div>
+        )}
+
+        {/* YouTube shows only the middle of the banner's width on a phone. */}
+        {!isAvatar && exists && (
+          <div className="pointer-events-none absolute inset-y-0 left-1/2 w-[60%] -translate-x-1/2 border-x border-dashed border-amber-400/40" />
+        )}
+        {mine && exists && (
+          <div className="absolute inset-0 grid place-items-center bg-black/60"><Spinner /></div>
+        )}
+      </div>
+
+      {!isAvatar && (
+        <p className="mt-1.5 text-[10px] leading-relaxed text-white/25">
+          Dashed lines mark what stays visible on a phone — keep the subject between them.
+        </p>
+      )}
+
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          disabled={busy}
+          loading={mine}
+          title={busy && !mine ? "Another image is generating" : ""}
+          onClick={() => brand.generate.mutate(kind)}
+        >
+          <Sparkles className="size-3" /> {exists ? "Regenerate" : "Generate"}
+        </Button>
+        {exists && (
+          <>
+            <a href={src} download={`${channel.id}-${kind}.png`}>
+              <Button size="sm" variant="ghost"><Download className="size-3" /> Download</Button>
+            </a>
+            <Button
+              size="sm" variant="ghost" disabled={busy}
+              className="hover:text-red-400"
+              title="Delete this image"
+              onClick={() => brand.clear.mutate(kind)}
+            >
+              <Trash2 className="size-3" />
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
   );
 }

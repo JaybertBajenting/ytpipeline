@@ -41,8 +41,21 @@ public sealed class ChannelLoader
         if (File.Exists(thumbRule)) channel.ThumbnailInstructions = File.ReadAllText(thumbRule);
         else if (File.Exists(thumbDefault)) channel.ThumbnailInstructions = File.ReadAllText(thumbDefault);
 
+        // Branding art lives beside the channel file, same as its rule files. Reported rather than
+        // stored, so deleting a png is enough to make the UI offer to generate it again.
+        channel.HasAvatar = File.Exists(BrandImagePath(channelId, BrandImage.Avatar));
+        channel.HasBanner = File.Exists(BrandImagePath(channelId, BrandImage.Banner));
+
         return channel;
     }
+
+    /// <summary>
+    /// Path to a channel's avatar or banner png (<c>channels/&lt;id&gt;.avatar.png</c>). Sits next
+    /// to the channel's json and rule files rather than in the run tree, because branding belongs
+    /// to the channel and outlives every video.
+    /// </summary>
+    public string BrandImagePath(string channelId, string kind) =>
+        Path.Combine(_channelsDir, $"{channelId}.{BrandImage.Normalize(kind)}.png");
 
     /// <summary>
     /// Writes a channel back to <c>channels/&lt;id&gt;.json</c>. <see cref="Channel.Id"/> and

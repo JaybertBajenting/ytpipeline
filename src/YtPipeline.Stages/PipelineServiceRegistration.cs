@@ -82,6 +82,8 @@ public static class PipelineServiceRegistration
         services.AddSingleton<ClaudeCliScriptGenerator>();
         services.AddSingleton<IScriptGenerator>(sp => sp.GetRequiredService<ClaudeCliScriptGenerator>());
         services.AddSingleton<PhoneticNarrationCleaner>();
+        // Not a stage — writes a channel's About text on demand from the Channels screen.
+        services.AddSingleton<ChannelIdentityWriter>();
         services.AddSingleton<MusicSelector>();
         // Both image backends are registered; the router picks per call from Settings.
         services.AddSingleton<CodexCliImageGenerator>();

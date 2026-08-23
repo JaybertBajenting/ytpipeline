@@ -1,10 +1,11 @@
 import { useState, type ReactNode } from "react";
 import {
-  ArrowLeft, CalendarDays, Camera, Clock, Download, ExternalLink, Square, ThumbsUp, Trash2,
+  ArrowLeft, CalendarDays, Camera, Clock, Download, ExternalLink, Music, Square, ThumbsUp,
+  Trash2, VolumeX,
 } from "lucide-react";
 import { api, type StageStatus } from "@/lib/api";
 import {
-  useApprove, useCancelJob, useJob, useRun, useRunStage, useScheduleRun, useSettings,
+  useApprove, useCancelJob, useChannels, useJob, useRun, useRunStage, useScheduleRun, useSettings,
 } from "@/lib/hooks";
 import { useUi } from "@/lib/store";
 import { Badge, Button, SectionLabel, Spinner, Tag, selectCls } from "./ui";
@@ -32,9 +33,13 @@ export function RunDetail({ runId }: { runId: string }) {
   const cancel = useCancelJob();
   const schedule = useScheduleRun();
   const { data: settings } = useSettings();
+  const { data: channels } = useChannels();
   const [privacy, setPrivacy] = useState("private");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showAllImages, setShowAllImages] = useState(false);
+  // Null until you touch the toggle, so the control shows what the last assembly actually did
+  // rather than resetting to a default every time this view mounts.
+  const [musicChoice, setMusicChoice] = useState<boolean | null>(null);
 
   // Read the provider from settings rather than hardcoding a name — the router resolves it at
   // call time, so a stale label here just makes people doubt their own configuration.
@@ -66,8 +71,13 @@ export function RunDetail({ runId }: { runId: string }) {
   // video stage waits for a complete set rather than merely a "done" flag.
   const videoReady = imagesComplete && st.voice.done;
 
-  const runStage = (s: any, p?: string, force?: boolean) =>
-    !busy && stage.mutate({ stage: s, privacy: p, force });
+  const runStage = (s: any, p?: string, force?: boolean, music?: boolean) =>
+    !busy && stage.mutate({ stage: s, privacy: p, force, music });
+
+  // What the next assembly will do about background music: your unsaved pick, else what this run
+  // chose last time, else the channel's own setting.
+  const channelMusic = channels?.find((c) => c.id === m.channel)?.music ?? true;
+  const musicOn = musicChoice ?? st.video.music ?? channelMusic;
 
   // Which stage is *actually* running right now. For an auto-run (one "auto" job that
   // walks script → voice → images → video) we derive it from the first incomplete stage,
@@ -109,7 +119,9 @@ export function RunDetail({ runId }: { runId: string }) {
       {/* ── Run header ──────────────────────────────────────────────────── */}
       <div className="mb-5 flex items-start gap-3">
         <div className="flex-1">
-          <h2 className="text-xl font-semibold leading-tight">{m.publish.title || m.topic}</h2>
+          {/* The topic as typed is the title — see TitleForPublish. Runs created before that was
+              pinned still carry a generated publish.title, so the topic leads here. */}
+          <h2 className="text-xl font-semibold leading-tight">{m.topic || m.publish.title}</h2>
           <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-white/40">
             <Badge tone="channel">{m.channel}</Badge>
             <span className="flex items-center gap-1">
@@ -251,7 +263,16 @@ export function RunDetail({ runId }: { runId: string }) {
             </Button>
           }
         >
-          {hasAudio && <audio controls className="w-full" src={api.audioUrl(runId)} />}
+          {hasAudio && (
+            <audio
+              // Keyed so React swaps the element outright when the file is re-rendered; changing
+              // src alone can leave the old buffered media in place.
+              key={st.voice.completedUtc ?? "audio"}
+              controls
+              className="w-full"
+              src={api.audioUrl(runId, st.voice.completedUtc)}
+            />
+          )}
         </StageCard>
 
         {/* 3 — Images */}
@@ -348,7 +369,9 @@ export function RunDetail({ runId }: { runId: string }) {
           defaultCollapsed={st.video.done}
           subtitle={st.video.musicTracks?.length
             ? `music: ${st.video.musicTracks.join(", ")}`
-            : undefined}
+            : st.video.done
+              ? "no background music"
+              : undefined}
           done={st.video.done}
           running={activeStage === "video"}
           locked={!videoReady}
@@ -361,20 +384,60 @@ export function RunDetail({ runId }: { runId: string }) {
                 </Button>
           )}
           actions={
-            <Button
-              disabled={busy || !videoReady}
-              title={videoReady
-                ? ""
-                : imagesPartial
-                  ? `Only ${images.length} of ${expectedFrames} frames exist — finish the images stage first`
-                  : "Need voice + images first"}
-              onClick={() => runStage("video")}
-            >
-              {st.video.done ? "Re-assemble video" : "Assemble video"}
-            </Button>
+            <>
+              <Button
+                disabled={busy || !videoReady}
+                title={videoReady
+                  ? ""
+                  : imagesPartial
+                    ? `Only ${images.length} of ${expectedFrames} frames exist — finish the images stage first`
+                    : "Need voice + images first"}
+                onClick={() => runStage("video", undefined, undefined, musicOn)}
+              >
+                {st.video.done ? "Re-assemble video" : "Assemble video"}
+              </Button>
+
+              {/* Chooses what the button above will do. The mp4 is only re-cut when you press
+                  Re-assemble, so flipping this on its own changes nothing yet. */}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={musicOn}
+                disabled={busy}
+                onClick={() => setMusicChoice(!musicOn)}
+                title={musicOn
+                  ? "Switch off to assemble a voice-only video — the music credit leaves the description too"
+                  : "Switch on to put background music back"}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                  musicOn
+                    ? "border-white/[0.08] bg-white/[0.02] text-white/55 hover:border-white/[0.16]"
+                    : "border-amber-500/30 bg-amber-500/[0.08] text-amber-400",
+                )}
+              >
+                {musicOn ? <Music className="size-3.5" /> : <VolumeX className="size-3.5" />}
+                {musicOn ? "With background music" : "No background music"}
+              </button>
+            </>
           }
         >
-          {hasVideo && <video controls className="w-full rounded-lg" src={api.videoUrl(runId)} />}
+          {/* Only worth saying while the mp4 on disk still disagrees with the toggle. */}
+          {!musicOn && (st.video.musicTracks?.length ?? 0) > 0 && (
+            <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2.5 text-xs leading-relaxed text-amber-200/80">
+              <span className="font-semibold">This video still has music in it.</span>{" "}
+              Press <strong>Re-assemble video</strong> to cut a voice-only version — that also
+              drops the <code>Music:</code> credit from the description below, since there's
+              nothing left to credit.
+            </div>
+          )}
+          {hasVideo && (
+            <video
+              key={st.video.completedUtc ?? "video"}
+              controls
+              className="w-full rounded-lg"
+              src={api.videoUrl(runId, st.video.completedUtc)}
+            />
+          )}
           {st.video.musicTracks && st.video.musicTracks.length > 0 && (
             <div className="mt-2">
               <div className="mb-1.5"><SectionLabel>Background music</SectionLabel></div>
@@ -423,7 +486,7 @@ export function RunDetail({ runId }: { runId: string }) {
                 <div>
                   <div className="mb-2"><SectionLabel>Video title</SectionLabel></div>
                   <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-sm text-white/80">
-                    {m.publish.title || script?.title}
+                    {m.topic || m.publish.title || script?.title}
                   </div>
                 </div>
                 <div>

@@ -160,6 +160,54 @@ public sealed class CodexCliImageGenerator(
         }
     }
 
+    public async Task<string> GenerateBrandImageAsync(
+        Channel channel, string kind, string targetPath, CancellationToken ct)
+    {
+        kind = BrandImage.Normalize(kind);
+        var dir = Path.GetDirectoryName(targetPath)!;
+        Directory.CreateDirectory(dir);
+
+        logger.LogInformation("Generating {Kind} for '{Channel}' ({Size}).",
+            kind, channel.Name, BrandImage.SizeLabel(kind));
+
+        // Written to a temp name and moved on success, so a failed regeneration leaves the
+        // channel's existing art alone rather than destroying it up front.
+        var temp = targetPath + ".new";
+        var prompt = new StringBuilder()
+            .AppendLine(BrandPrompt.Build(channel, kind))
+            .AppendLine()
+            .AppendLine("You MUST create this image with your native image_generation tool. Do NOT draw or synthesize it with")
+            .AppendLine("code (no Python/PIL/matplotlib/cairo/SVG/HTML/ImageMagick) — an image produced by code is unacceptable.")
+            .AppendLine("After generating it, SAVE the image as a PNG file at this exact path:")
+            .AppendLine($"    {temp}")
+            .Append("Do not ask for confirmation.")
+            .ToString();
+
+        for (int attempt = 1; ; attempt++)
+        {
+            if (File.Exists(temp)) { try { File.Delete(temp); } catch { } }
+            try
+            {
+                await process.RunOrThrowAsync(
+                    options.Executable, options.ArgsTemplate,
+                    workingDirectory: dir, stdin: prompt, ct: ct);
+
+                if (!File.Exists(temp))
+                    throw new InvalidOperationException($"Codex finished but no {kind} at {temp}.");
+
+                File.Move(temp, targetPath, overwrite: true);
+                logger.LogInformation("{Kind} -> {Path}", kind, targetPath);
+                return targetPath;
+            }
+            catch (Exception ex) when (attempt < MaxAttempts && !ct.IsCancellationRequested)
+            {
+                logger.LogWarning("Codex {Kind} failed (attempt {Attempt}/{Max}): {Msg}. Retrying in 5s…",
+                    kind, attempt, MaxAttempts, ex.Message);
+                await Task.Delay(TimeSpan.FromSeconds(5), ct);
+            }
+        }
+    }
+
     private static void ClearPngs(string dir)
     {
         if (!Directory.Exists(dir)) return;

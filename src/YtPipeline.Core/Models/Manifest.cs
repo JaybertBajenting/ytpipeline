@@ -67,6 +67,13 @@ public sealed class StageStatus
     public T? Get<T>(string key) =>
         Extra.TryGetValue(key, out var v) ? v.ToObject<T>() : default;
 
+    /// <summary>
+    /// Drops a stage-specific field. Re-running a stage that produces less than it did last time
+    /// has to remove what it no longer produced — a re-assembly without music that left the old
+    /// <c>musicTracks</c> in place would keep listing tracks the mp4 no longer contains.
+    /// </summary>
+    public void Clear(string key) => Extra.Remove(key);
+
     public void MarkDone(string? path = null)
     {
         Done = true;

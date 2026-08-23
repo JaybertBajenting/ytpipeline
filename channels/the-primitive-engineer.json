@@ -7,28 +7,88 @@
   "videoLengthTargetMinutes": 3,
   "videoLengthMinMinutes": 3,
   "videoLengthMaxMinutes": 5,
+  "scriptVoiceRules": "Write in very short declarative sentences. Median about 7 words; roughly a third under 6 words; NEVER exceed 17 words in a single sentence. Second person throughout - 'you' chip the rock, 'you' build the furnace. Use bare fragments as payoff lines: when a milestone is finally reached, name it in a sentence of its own. Chain sections with dependency logic - 'you cannot do X until you have Y'. Give scale by escalating specificity, not adjectives. Drop occasional deadpan anticlimax lines noting that a step feeds nobody and keeps no one warm. At most TWO questions in the whole script, used to pivot between sections. NEVER say 'in this video', 'let's dive in', 'stick around', or ask for likes or subscribers. No greeting, no sign-off beyond the final dry line.",
   "scriptStructure": [
-    "VOICE RULES - APPLY THROUGHOUT, THESE MATTER MORE THAN ANY SECTION: Write in very short declarative sentences. Median about 7 words; roughly a third under 6 words; NEVER exceed 17 words in a single sentence. Second person throughout - 'you' chip the rock, 'you' build the furnace. Use bare fragments as payoff lines: when a milestone is finally reached, name it in a sentence of its own. Chain sections with dependency logic - 'you cannot do X until you have Y'. Give scale by escalating specificity, not adjectives. Drop occasional deadpan anticlimax lines noting that a step feeds nobody and keeps no one warm. At most TWO questions in the whole script, used to pivot between sections. NEVER say 'in this video', 'let's dive in', 'stick around', or ask for likes or subscribers. No greeting, no sign-off beyond the final button.",
-    "COLD OPEN - THE PREMISE (0:00-0:30, ~60-80 words): Drop the viewer into the deep past in the first sentence. Strip everything away in a short list - no tools, no power, no help, and nobody who speaks their language. Put ONE crude object in their hand. State the absurd goal: build the modern thing in the title. Then land the reframe that powers the whole video - the goal is impossible on its own, because almost all of civilisation has to be rebuilt first.",
-    "RUNG 1 - SURVIVE (~55-75 words): Before inventing anything they must not die. Tools from stone, shelter, which plants and animals are food and which kill them. Injuries. End on the realisation that survival consumes every hour, and invention needs spare time.",
-    "RUNG 2 - SURPLUS (~55-75 words): Farming, stored food, bred animals. The point is not agriculture, it is free time. Add a distance marker that keeps the goal absurdly far off - state roughly how many thousands of years remain.",
-    "RUNG 3 - MATERIALS (~60-85 words): They find something in the ground they cannot use yet. Pose the first pivot question - how do you turn this into something useful. Answer with a process, not a noun: heat, fuel, a crude furnace, temperature pushed higher. Name the result as its own short sentence. Note what it unlocks that stone never could.",
-    "RUNG 4 - ABSTRACT TOOLS (~60-85 words): Machines are not enough; they need to measure, predict and prove. Counting to arithmetic to geometry to the rules behind moving things. Include writing things down so knowledge outlives them, and call that the most important habit. Add the deadpan line that none of this feeds them, but nothing later is possible without it.",
-    "RUNG 5 - THE FORCE (~65-90 words): They notice a phenomenon in nature they cannot explain, reproduce it deliberately, then face the harder problem of having it on demand rather than by accident. Cover generation, the means of carrying it, and the properties they must understand to control it.",
-    "RUNG 6 - FIRST APPLICATION, THEN THE ACCIDENT (~70-95 words): Give the crude first use of that force and why it changed everything. Then break the march of steps with an accident: something behaves impossibly, they say so plainly, and they TEST it - move it further, put a barrier between. It keeps working. Explain the mechanism in two short sentences, then name the discovery as its own sentence.",
-    "RUNG 7 - THE IMPOSSIBLE PURITY (~65-90 words): The final component needs a material or tolerance that sounds unreasonable. Escalate the specificity in steps rather than stating it once. Point out that reaching it needs infrastructure that does not exist yet - so they invent that too. Then the component itself, and how absurdly many of them fit in the finished object.",
-    "ARRIVAL (~40-55 words): Assemble the remaining pieces in a short list, connect two of the things they built, then build the title object. State plainly that after thousands of years it is finished.",
-    "REFRAME CLOSE + BUTTON (~40-55 words): Say what most people believe the title object is. Correct it - it was never the invention, it is the reward sitting on top of everything beneath it. Then one dry, deadpan closing line about what they will now do with it. Stop there."
+    "COLD OPEN - THE PREMISE (~11%): Drop the viewer into the deep past in the first sentence, strip everything away in a short list, put ONE crude object in their hand, state the absurd goal, then land the reframe - the goal needs most of civilisation rebuilt first.",
+    "RUNG 1 - SURVIVE (~11%): They must not die before inventing anything. End on survival consuming every hour.",
+    "RUNG 2 - SURPLUS (~11%): Stored food and free time, with a distance marker stating how far off the goal still is.",
+    "RUNG 3 - MATERIALS (~13%): Something in the ground they cannot use yet, then a process rather than a noun. Name the result as its own sentence.",
+    "RUNG 4 - ABSTRACT TOOLS (~13%): Measuring, predicting, writing things down. Add the deadpan line that none of it feeds them.",
+    "RUNG 5 - THE FORCE (~13%): A phenomenon noticed, reproduced deliberately, then had on demand.",
+    "RUNG 6 - APPLICATION AND ACCIDENT (~14%): The crude first use, then something behaves impossibly and they test it. Name the discovery.",
+    "ARRIVAL AND REFRAME (~14%): Assemble the last pieces, build the title object, then correct what people think it is - the reward, not the invention. One dry closing line."
+  ],
+  "scriptTemplates": [
+    {
+      "name": "tech-tree-climb",
+      "lastUsedUtc": "2026-08-12T19:32:21.7477695Z",
+      "sections": [
+        "COLD OPEN - THE PREMISE (~11%): Drop the viewer into the deep past in the first sentence. Strip everything away in a short list - no tools, no power, no help, nobody who speaks their language. Put ONE crude object in their hand. State the absurd goal. Then the reframe: the goal is impossible alone, because almost all of civilisation has to be rebuilt first.",
+        "RUNG 1 - SURVIVE (~11%): Before inventing anything they must not die. Stone tools, shelter, which plants and animals are food and which kill them. End on survival consuming every hour, and invention needing spare time.",
+        "RUNG 2 - SURPLUS (~11%): Stored food, bred animals, cleared land. The point is not farming, it is free time. Add a distance marker stating roughly how many thousands of years remain.",
+        "RUNG 3 - MATERIALS (~13%): They find something in the ground they cannot use yet. Pose a pivot question, then answer with a process rather than a noun - heat, fuel, temperature pushed higher. Name the result as its own short sentence.",
+        "RUNG 4 - ABSTRACT TOOLS (~13%): Measuring, predicting and proving. Counting to arithmetic to geometry to the rules behind moving things, plus writing so knowledge outlives them. Add the deadpan line that none of this feeds them.",
+        "RUNG 5 - THE FORCE (~13%): A phenomenon in nature they cannot explain, reproduced deliberately, then the harder problem of having it on demand rather than by accident.",
+        "RUNG 6 - APPLICATION, THEN THE ACCIDENT (~14%): The crude first use and why it changed everything. Then break the march: something behaves impossibly, they say so plainly, and they TEST it. Name the discovery as its own sentence.",
+        "ARRIVAL AND REFRAME (~14%): Assemble the remaining pieces, connect two things they built, and finish the title object. Then correct what most people believe it is - never the invention, the reward sitting on everything beneath it. One dry closing line. Stop."
+      ]
+    },
+    {
+      "name": "bill-of-materials",
+      "lastUsedUtc": "2026-08-20T06:13:04.3682851Z",
+      "sections": [
+        "WHAT IT IS ACTUALLY MADE OF (~14%): Open by taking the finished modern object apart in plain language - name every distinct material inside it, one short sentence each. The list itself should sound unreasonable.",
+        "NONE OF THIS EXISTS YET (~10%): Put the viewer in the deep past holding one crude object, and state that not a single item on that list can be picked up anywhere on Earth. Each has to be made.",
+        "THE EASY ONES (~16%): Take the two or three materials that are merely hard, and source them - where they occur, what process frees them, what it costs in labour. Move fast; these are the warm-up.",
+        "THE ONE THAT NEEDS A FURNACE (~20%): Take the material that needs a process rather than a place. Build the process from nothing - fuel, containment, temperature, and how they know when it worked. Name the result on its own line.",
+        "THE ONE THAT NEEDS A CIVILISATION (~24%): Take the hardest item and show that making it requires tools that require other tools. Escalate through two or three layers of prerequisite, then state plainly that they have to invent the supply chain before the part.",
+        "ASSEMBLY (~10%): Put the list back together in order. State how long the whole bill of materials took.",
+        "REFRAME (~6%): One line: the object is not a thing, it is a list of solved problems. Then a dry closing line. Stop."
+      ]
+    },
+    {
+      "name": "one-impossible-step",
+      "sections": [
+        "MOSTLY EASY (~15%): Open in the deep past with the goal stated, then say something surprising - most of this is achievable. Sketch the straightforward majority of the build in quick short sentences, covering a lot of ground fast.",
+        "EXCEPT FOR ONE THING (~10%): Stop. Name the single component or tolerance that ruins the whole plan, and state that everything else was the easy part.",
+        "WHY IT IS HARD (~24%): Explain from first principles what makes that one step nearly impossible - a purity, a temperature, a precision, a scale. Escalate the specificity in steps. Do not solve it yet.",
+        "THE ATTEMPTS THAT FAIL (~20%): Try it two ways that a reasonable person would try, and show precisely why each fails. Each failure should teach the constraint that the real answer must satisfy.",
+        "THE WAY THROUGH (~20%): Give the approach that actually works, and be honest about what it costs - years, infrastructure, or an accepted imperfection.",
+        "ARRIVAL AND REFRAME (~11%): Finish the object in two sentences. Then land that the entire object exists because of that one solved step, and everyone thinks it is the other parts. One dry closing line. Stop."
+      ]
+    },
+    {
+      "name": "two-parallel-chains",
+      "sections": [
+        "TWO PROBLEMS, NOT ONE (~13%): Open in the deep past with the goal, then reveal it needs two completely unrelated things that have nothing to do with each other. Name both. State that neither is useful without the other.",
+        "CHAIN ONE - THE PHYSICAL (~26%): Build the material or mechanical half from nothing, in three ordered dependency steps. Name its finished result on its own line. Then note it does nothing yet.",
+        "CHAIN TWO - THE ABSTRACT (~26%): Build the knowledge or measurement half from nothing, in three ordered steps. Include the deadpan line that none of this can be held or eaten. Name its result on its own line.",
+        "THE MEETING (~20%): Bring the two chains together and show the exact moment they combine into something neither could do alone. This is the payoff - give it the most concrete detail in the script.",
+        "ARRIVAL AND REFRAME (~15%): Finish the title object. Then reframe: it was never one invention, it was two histories arriving at the same place. One dry closing line. Stop."
+      ]
+    },
+    {
+      "name": "three-failed-attempts",
+      "sections": [
+        "THE GOAL AND THE FIRST IDEA (~14%): Deep past, one crude object, absurd goal. Then the obvious first approach, described confidently, as though it will work.",
+        "ATTEMPT ONE FAILS (~18%): Build it and use it. It fails in a specific, physical, slightly humiliating way. Explain the mechanism of the failure in two short sentences, and state the constraint it just taught.",
+        "ATTEMPT TWO FAILS (~20%): Fix that constraint and try again. It fails differently - because solving the first problem exposed a second one that was hidden underneath. Name what it taught.",
+        "ATTEMPT THREE FAILS (~20%): Fix that too. This time it almost works, and fails on something unfair - a material, a tolerance, a scale that simply is not achievable yet. State what has to exist first.",
+        "WHAT FINALLY WORKS (~18%): Build the version that succeeds, and make clear it only works because of all three failures. Name the finished thing on its own line.",
+        "REFRAME (~10%): One line: nobody invented this once, it was invented by everything that broke first. Then a dry closing line. Stop."
+      ]
+    }
   ],
   "visualStyle": "MS Paint stick-figure aesthetic, 16:9, flat solid colors, thick black outlines, big hand-lettered title text, white background",
   "voiceNotes": "Brisk American narration from a young voice - mid-twenties, light mid-range, natural and slightly unpolished rather than a trained announcer. Roughly 145-155 words per minute, clipped and matter-of-fact, with a beat of silence before each named payoff word so it lands. Falls at the end of every sentence - statements, never questions. Completely flat: no upbeat energy, no upspeak, none of the rising sing-song of YouTube presenters. Describes extraordinary things as though they are mildly inconvenient - the gap between an absurd premise and a bored delivery IS the joke, so the closing line is delivered totally straight.",
   "voice": {
     "voiceId": "xJzvUwnowDrYojvzeaQ2",
     "voiceName": "American deadpan narrator (mid-20s)",
-    "modelId": "",
+    "modelId": "eleven_v3",
     "stability": 0.5,
     "similarityBoost": 0.75,
-    "wordsPerMinute": 205.3
+    "speed": 0.9,
+    "wordsPerMinute": 189.5
   },
   "music": true,
   "youtube": {
@@ -45,5 +105,14 @@
     ],
     "titlePattern": "How To Make {topic} Starting With Only A Rock",
     "descriptionFooter": "\n\nThe Primitive Engineer - rebuilding modern technology from a rock, one prerequisite at a time."
+  },
+  "identity": {
+    "handle": "",
+    "bio": "",
+    "byline": "",
+    "keywords": [],
+    "links": [],
+    "avatarPrompt": "",
+    "bannerPrompt": ""
   }
 }

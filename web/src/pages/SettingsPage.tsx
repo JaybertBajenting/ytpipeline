@@ -154,6 +154,29 @@ function PipelineSettings({ section }: { section: "audio" | "images" }) {
               </Callout>
             )}
 
+            {/* Frames are bulk work; the thumbnail is one image that has to follow a long style
+                rule. Splitting them lets the fussy job go to the backend that reads the rule
+                properly without slowing the bulk job down. */}
+            <div className="border-t border-white/[0.06] pt-4">
+              <Switch
+                checked={!!draft.thumbnailProvider}
+                onChange={(on) => set("thumbnailProvider", on ? (isGflow ? "codex" : "gflow") : "")}
+                label={`Use ${isGflow ? "Codex" : "gflow"} for the thumbnail`}
+                desc={`Frames keep using ${isGflow ? "gflow" : "Codex"}. Only the single publish thumbnail switches.`}
+              />
+              {draft.thumbnailProvider && (
+                <div className="mt-3">
+                <Callout tone="info" title="Why you might want this">
+                  A thumbnail is one image that has to obey the whole
+                  <code> _default.thumbnail.md</code> rule — white to the edges, two or three
+                  elements, red doing one job. An agent that reads the rule end to end tends to hold
+                  that better than a fast renderer, and at one image per video the extra time costs
+                  nothing. Frames are unaffected.
+                </Callout>
+                </div>
+              )}
+            </div>
+
             {/* Fallback: the whole point is finishing a video when a daily quota runs out
                 part-way, without hand-holding the switchover. */}
             <div className="border-t border-white/[0.06] pt-4">

@@ -26,6 +26,20 @@ public sealed class VoiceSettings
 {
     [JsonPropertyName("stability")] public double Stability { get; set; } = 0.5;
     [JsonPropertyName("similarity_boost")] public double SimilarityBoost { get; set; } = 0.75;
+
+    /// <summary>
+    /// Delivery speed. 1.0 is the voice's natural pace; below 1.0 is slower, above is faster.
+    /// <para>
+    /// This is the ONLY thing that changes how fast the narration is read. The channel's
+    /// words-per-minute figure sizes the script and does not affect delivery at all — lowering it
+    /// just produces a shorter video read at the same speed.
+    /// </para>
+    /// Omitted from the request when null, so voices without an explicit setting keep the
+    /// behaviour they had before this existed.
+    /// </summary>
+    [JsonPropertyName("speed")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? Speed { get; set; }
 }
 
 public sealed class TtsTimestampsResponse

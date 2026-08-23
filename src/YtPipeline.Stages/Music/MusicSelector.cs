@@ -38,12 +38,18 @@ public sealed class MusicSelector(
     /// Selects and orders background music tracks for a video of the given duration.
     /// Returns an empty list (no music) on any failure.
     /// </summary>
+    /// <param name="enabled">
+    /// Per-run override for <see cref="Channel.Music"/>, letting one video opt in or out without
+    /// changing the channel. Null follows the channel. The app-wide switch still wins over both —
+    /// turning music off globally means the library isn't used at all.
+    /// </param>
     public async Task<IReadOnlyList<string>> SelectAsync(
-        Channel channel, ScriptDocument script, double audioSeconds, CancellationToken ct)
+        Channel channel, ScriptDocument script, double audioSeconds, CancellationToken ct,
+        bool? enabled = null)
     {
         if (!options.Enabled) return [];
 
-        if (!channel.Music)
+        if (!(enabled ?? channel.Music))
         {
             logger.LogInformation("Music disabled for channel '{Channel}' — voice-only video.", channel.Name);
             return [];

@@ -15,4 +15,10 @@ public interface IImageGenerator
 
     /// <summary>Generates a single YouTube thumbnail for the run. Returns its path.</summary>
     Task<string> GenerateThumbnailAsync(Run run, ScriptDocument script, Channel channel, CancellationToken ct);
+
+    /// <summary>
+    /// Generates the channel's own avatar or banner art into <paramref name="targetPath"/>.
+    /// Belongs to the channel rather than any run — see <see cref="BrandImage"/> for the kinds.
+    /// </summary>
+    Task<string> GenerateBrandImageAsync(Channel channel, string kind, string targetPath, CancellationToken ct);
 }

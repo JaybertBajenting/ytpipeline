@@ -33,6 +33,13 @@ public sealed class Channel
     /// </summary>
     public int VideoLengthMaxMinutes { get; set; }
     /// <summary>
+    /// Standing sentence-level rules for this channel — rhythm, person, banned filler. Always sent
+    /// with whichever structure is chosen, so the channel's voice survives template rotation
+    /// without every template having to repeat the same block.
+    /// </summary>
+    public string ScriptVoiceRules { get; set; } = "";
+
+    /// <summary>
     /// Fallback structure, used when <see cref="ScriptTemplates"/> is empty.
     /// </summary>
     public List<string> ScriptStructure { get; set; } = new();
@@ -61,6 +68,24 @@ public sealed class Channel
     public bool Music { get; set; } = true;
 
     public YoutubeDefaults Youtube { get; set; } = new();
+
+    /// <summary>
+    /// How the CHANNEL itself presents on YouTube — handle, About text, keywords, links, and the
+    /// avatar/banner art. Distinct from <see cref="Persona"/> and friends, which describe how the
+    /// videos are written: this is the shop front, that is the writing brief.
+    /// <para>
+    /// Recorded here for you to copy into YouTube Studio by hand; nothing is pushed automatically.
+    /// </para>
+    /// </summary>
+    public ChannelIdentity Identity { get; set; } = new();
+
+    /// <summary>Whether <c>channels/&lt;id&gt;.avatar.png</c> exists. Reported, never stored.</summary>
+    [JsonIgnore]
+    public bool HasAvatar { get; set; }
+
+    /// <summary>Whether <c>channels/&lt;id&gt;.banner.png</c> exists. Reported, never stored.</summary>
+    [JsonIgnore]
+    public bool HasBanner { get; set; }
 
     /// <summary>
     /// Full image-generation rule for Stage 2, loaded from the sibling <c>&lt;id&gt;.image.md</c>
@@ -111,6 +136,17 @@ public sealed class ChannelVoice
     public double? SimilarityBoost { get; set; }
 
     /// <summary>
+    /// How fast the voice reads, where 1.0 is its natural pace and lower is slower. Null leaves
+    /// it at the voice's default.
+    /// <para>
+    /// This is the only setting that changes delivery speed. <see cref="WordsPerMinute"/> is a
+    /// measurement used to size scripts — lowering that shortens the video without slowing a
+    /// single word of it.
+    /// </para>
+    /// </summary>
+    public double? Speed { get; set; }
+
+    /// <summary>
     /// Measured speaking rate for THIS voice, in words per minute, learned from finished runs.
     /// <para>
     /// Speaking rate is a property of the voice, not a constant: two real voices on this project
@@ -145,4 +181,44 @@ public sealed class YoutubeDefaults
     public List<string> DefaultTags { get; set; } = new();
     public string TitlePattern { get; set; } = "{topic}";
     public string DescriptionFooter { get; set; } = "";
+}
+
+/// <summary>
+/// The channel's public identity on YouTube. Field limits mirror YouTube's own so what's written
+/// here can be pasted into Studio without being rejected.
+/// </summary>
+public sealed class ChannelIdentity
+{
+    /// <summary>Handle without the leading @ — e.g. <c>theprimitiveengineer</c>. 3-30 chars there.</summary>
+    public string Handle { get; set; } = "";
+
+    /// <summary>The About-page description. YouTube caps this at 1000 characters.</summary>
+    public string Bio { get; set; } = "";
+
+    /// <summary>
+    /// One-line summary shown under the channel name in some surfaces. Falls back to
+    /// <see cref="Channel.Tagline"/> when empty.
+    /// </summary>
+    public string Byline { get; set; } = "";
+
+    /// <summary>Channel keywords (Studio → Settings → Channel → Basic info).</summary>
+    public List<string> Keywords { get; set; } = new();
+
+    /// <summary>Links shown on the channel page, in order.</summary>
+    public List<ChannelLink> Links { get; set; } = new();
+
+    /// <summary>
+    /// Optional art direction for the avatar, on top of the channel's own image rule. Empty lets
+    /// the generator work from the channel's look alone.
+    /// </summary>
+    public string AvatarPrompt { get; set; } = "";
+
+    /// <summary>Optional art direction for the banner. Same fallback as <see cref="AvatarPrompt"/>.</summary>
+    public string BannerPrompt { get; set; } = "";
+}
+
+public sealed class ChannelLink
+{
+    public string Label { get; set; } = "";
+    public string Url { get; set; } = "";
 }

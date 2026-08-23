@@ -1,6 +1,6 @@
 import {
-  CalendarDays, Camera, CheckCircle2, Film, Image as ImageIcon, Mic, MonitorPlay,
-  Rocket, Square, ThumbsUp, Trash2, Volume2,
+  CalendarDays, Camera, CheckCircle2, Film, Image as ImageIcon, Mic, MonitorPlay, Music,
+  Rocket, Square, ThumbsUp, Trash2, Volume2, VolumeX,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { api, stagesDone, type Manifest, type StageName, type StageStatus } from "@/lib/api";
@@ -47,7 +47,9 @@ export function VideoCard({
   const done = stagesDone(m);
   const st = m.stages;
   const complete = st.video.done;
-  const title = m.publish.title || m.topic;
+  // The topic as typed is the title. Older runs still carry a generated publish.title, which is
+  // only a fallback for the rare run created without a topic.
+  const title = m.topic || m.publish.title;
 
   // Publishing posts publicly, so it stays behind the video checkpoint — same gate the detail
   // view uses.
@@ -61,6 +63,19 @@ export function VideoCard({
         : "";
 
   const run = (s: StageName) => { if (canPublish) stage.mutate({ stage: s }); };
+
+  // Re-running a finished stage. Deliberately NOT behind canPublish — redoing the voice or the
+  // cut is what you do to a video that isn't approved yet, so gating it on approval would lock
+  // out the exact case it exists for.
+  const regen = (s: StageName, music?: boolean) => { if (!running) stage.mutate({ stage: s, music }); };
+
+  // Both are strictly *re*-generate: the first run of each stage happens in the detail view,
+  // which can check frames-against-beats properly. st.images.done alone can't be trusted for
+  // that — the stage marks itself done on a partial set.
+  const canRedoVoice = st.voice.done && !running;
+  const canRedoVideo = st.video.done && !running;
+  // Runs assembled before the music choice was recorded fall back to whether tracks came out.
+  const musicOn = st.video.music ?? (st.video.musicTracks?.length ?? 0) > 0;
 
   const openDetail = () => select(m.runId);
 
@@ -117,10 +132,9 @@ export function VideoCard({
       {/* ── Body (opens detail) ─────────────────────────────────────────── */}
       <div className="flex flex-1 cursor-pointer flex-col gap-2.5 p-3.5" onClick={openDetail}>
         <div className="min-w-0 flex-1">
+          {/* The second line used to carry the topic when a generated title displaced it. The
+              title IS the topic now, so it would just print the same text twice. */}
           <h3 className="clamp-2 text-[13px] font-semibold leading-snug text-white/90">{title}</h3>
-          {m.publish.title && m.publish.title !== m.topic && (
-            <p className="clamp-2 mt-1 text-[11px] leading-relaxed text-white/30">{m.topic}</p>
-          )}
         </div>
 
         <div className="flex items-center gap-1">
@@ -159,6 +173,43 @@ export function VideoCard({
           )}
         </div>
       </div>
+
+      {/* ── Redo row (does NOT open detail) ─────────────────────────────── */}
+      {!running && (canRedoVoice || canRedoVideo) && (
+        <div className="flex items-center gap-1 border-t border-white/[0.06] bg-white/[0.015] px-1.5 py-1.5">
+          <span className="shrink-0 pl-1 pr-0.5 text-[9px] font-semibold uppercase tracking-wider text-white/25">
+            Redo
+          </span>
+          <RedoButton
+            label="Voice" icon={<Volume2 className="size-3" />}
+            disabled={!canRedoVoice}
+            tip={canRedoVoice
+              ? "Generate the voiceover again — picks up a changed voice or model"
+              : "Generate the voiceover first"}
+            onClick={() => regen("voice")}
+          />
+          <RedoButton
+            label="Video" icon={<Film className="size-3" />}
+            disabled={!canRedoVideo}
+            tip={canRedoVideo
+              ? `Re-assemble the mp4${musicOn ? "" : " (still without music)"}`
+              : "Assemble the video first"}
+            onClick={() => regen("video")}
+          />
+          <RedoButton
+            label={musicOn ? "No music" : "Music"}
+            icon={musicOn ? <VolumeX className="size-3" /> : <Music className="size-3" />}
+            active={!musicOn}
+            disabled={!canRedoVideo}
+            tip={!canRedoVideo
+              ? "Assemble the video first"
+              : musicOn
+                ? "Re-assemble voice-only, and drop the music credit from the description"
+                : "Re-assemble with background music, and put its credit back in the description"}
+            onClick={() => regen("video", !musicOn)}
+          />
+        </div>
+      )}
 
       {/* ── Publish row / running row (does NOT open detail) ────────────── */}
       {running ? (
@@ -220,6 +271,35 @@ function statusTip(platform: string, s: StageStatus) {
   if (s.done) return `${platform}: published`;
   if (s.skipReason) return `${platform} skipped — ${s.skipReason}`;
   return `Publish to ${platform}`;
+}
+
+/**
+ * One re-run action. Flatter than {@link PublishButton}: these repeat work that's already done
+ * rather than sending anything outward, so there's no published/skipped state to carry. `active`
+ * marks the one that describes a change from how the video stands now.
+ */
+function RedoButton({
+  label, icon, disabled, onClick, tip, active,
+}: {
+  label: string; icon: ReactNode; disabled?: boolean;
+  onClick: () => void; tip: string; active?: boolean;
+}) {
+  return (
+    <button
+      title={tip}
+      disabled={disabled}
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      className={cn(
+        "flex flex-1 items-center justify-center gap-1 rounded-md px-1 py-1 text-[10px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-35",
+        active
+          ? "bg-amber-500/[0.08] text-amber-400/80 hover:bg-amber-500/15"
+          : "text-white/45 hover:bg-white/[0.07] hover:text-white/80",
+      )}
+    >
+      {icon}
+      {label}
+    </button>
+  );
 }
 
 function PublishButton({

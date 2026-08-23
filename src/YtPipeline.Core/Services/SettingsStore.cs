@@ -72,6 +72,17 @@ public sealed class SettingsStore
         // A fallback equal to the primary would just re-run the same exhausted backend.
         if (s.ImageFallbackProvider == s.ImageProvider) s.ImageFallbackProvider = "";
 
+        // Empty is meaningful here — it means "follow ImageProvider" — so an unrecognised value
+        // clears the override rather than defaulting to a backend the user never chose.
+        s.ThumbnailProvider = s.ThumbnailProvider?.Trim().ToLowerInvariant() switch
+        {
+            ImageProviders.Gflow => ImageProviders.Gflow,
+            ImageProviders.Codex => ImageProviders.Codex,
+            _ => "",
+        };
+        // Naming the same backend the frames already use is just the inherited behaviour.
+        if (s.ThumbnailProvider == s.ImageProvider) s.ThumbnailProvider = "";
+
         s.QuotaCooldownMinutes = Math.Clamp(s.QuotaCooldownMinutes, 5, 24 * 60);
         s.DefaultWordsPerMinute = Math.Clamp(s.DefaultWordsPerMinute, 60, 320);
         s.VoiceGain = Math.Clamp(s.VoiceGain, 0.1, 4.0);
@@ -81,8 +92,10 @@ public sealed class SettingsStore
         if (s.Gflow.ArgsTemplate.Count == 0) s.Gflow.ArgsTemplate = new List<string> { "image", "t2i" };
         if (string.IsNullOrWhiteSpace(s.Gflow.OutputFlag)) s.Gflow.OutputFlag = "-o";
         if (s.Gflow.CheckArgs.Count == 0) s.Gflow.CheckArgs = new List<string> { "--version" };
-        // Never let the aspect fall back to gflow's vertical 9:16 default.
-        if (string.IsNullOrWhiteSpace(s.Gflow.Aspect)) s.Gflow.Aspect = "16:9";
+        // Never let the aspect fall back to gflow's vertical 9:16 default. The value must be one of
+        // gflow's NAMES (landscape|4x3|square|3x4|portrait) — a ratio like "16:9" is rejected with
+        // "invalid choice" and every call fails, so the default has to be a name too.
+        if (string.IsNullOrWhiteSpace(s.Gflow.Aspect)) s.Gflow.Aspect = "landscape";
         if (string.IsNullOrWhiteSpace(s.Gflow.Model)) s.Gflow.Model = "nano-pro";
         s.Gflow.TimeoutSeconds = Math.Clamp(s.Gflow.TimeoutSeconds, 30, 3600);
         s.Gflow.MaxConcurrent = Math.Clamp(s.Gflow.MaxConcurrent, 1, 8);

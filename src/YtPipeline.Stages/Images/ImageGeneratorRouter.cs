@@ -100,9 +100,43 @@ public sealed class ImageGeneratorRouter(
         return images;
     }
 
-    /// <summary>Thumbnails are a single image, so there's nothing to split — preferred, then standby.</summary>
+    /// <summary>
+    /// Thumbnails are a single image, so there's nothing to split — preferred, then standby.
+    /// <para>
+    /// The preferred backend here is <see cref="AppSettings.ThumbnailProvider"/> when it is set,
+    /// so the thumbnail can come from a different backend than the frames without changing what
+    /// bulk frame work uses.
+    /// </para>
+    /// </summary>
     public async Task<string> GenerateThumbnailAsync(
         Run run, ScriptDocument script, Channel channel, CancellationToken ct)
+    {
+        var cfg = settings.Current;
+        var wanted = string.IsNullOrEmpty(cfg.ThumbnailProvider) ? cfg.ImageProvider : cfg.ThumbnailProvider;
+        if (wanted != cfg.ImageProvider)
+            logger.LogInformation("Thumbnail provider is {Wanted} (frames use {Frames}).", wanted, cfg.ImageProvider);
+
+        // Standby is whatever the wanted backend is NOT, so an explicit thumbnail choice still has
+        // somewhere to fall back to even when it matches the configured global fallback.
+        var standby = cfg.ImageFallbackProvider is { Length: > 0 } fb && fb != wanted
+            ? fb
+            : wanted == ImageProviders.Gflow ? ImageProviders.Codex : ImageProviders.Gflow;
+
+        var benched = health.BenchedUntil(wanted, cfg.QuotaCooldownMinutes) is not null;
+        var first = benched ? standby : wanted;
+
+        try { return await Generator(first).GenerateThumbnailAsync(run, script, channel, ct); }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) when (first != standby)
+        {
+            logger.LogWarning(ex, "Thumbnail via {First} failed — trying {Standby}.", first, standby);
+            return await Generator(standby).GenerateThumbnailAsync(run, script, channel, ct);
+        }
+    }
+
+    /// <summary>Channel art is a single image too — same preferred-then-standby handling.</summary>
+    public async Task<string> GenerateBrandImageAsync(
+        Channel channel, string kind, string targetPath, CancellationToken ct)
     {
         var cfg = settings.Current;
         var benched = health.BenchedUntil(cfg.ImageProvider, cfg.QuotaCooldownMinutes) is not null;
@@ -110,15 +144,15 @@ public sealed class ImageGeneratorRouter(
             ? cfg.ImageFallbackProvider
             : cfg.ImageProvider;
 
-        try { return await Generator(first).GenerateThumbnailAsync(run, script, channel, ct); }
+        try { return await Generator(first).GenerateBrandImageAsync(channel, kind, targetPath, ct); }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex) when (!string.IsNullOrEmpty(cfg.ImageFallbackProvider)
                                    && first != cfg.ImageFallbackProvider)
         {
-            logger.LogWarning(ex, "Thumbnail via {First} failed — trying {Standby}.",
-                first, cfg.ImageFallbackProvider);
+            logger.LogWarning(ex, "{Kind} via {First} failed — trying {Standby}.",
+                kind, first, cfg.ImageFallbackProvider);
             return await Generator(cfg.ImageFallbackProvider)
-                .GenerateThumbnailAsync(run, script, channel, ct);
+                .GenerateBrandImageAsync(channel, kind, targetPath, ct);
         }
     }
 

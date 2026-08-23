@@ -1,12 +1,11 @@
-﻿{
+{
   "version": "0.0.1",
-  "autoPort": true,
   "configurations": [
     {
-      "name": "ytpipeline",
-      "runtimeExecutable": "dotnet",
-      "runtimeArgs": ["run", "--project", "src/YtPipeline.Web", "--environment", "Development"],
-      "port": 5187
+      "name": "ytpipeline-web",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set PORT=5099 && dotnet run --project src\\YtPipeline.Web"],
+      "port": 5099
     }
   ]
 }

@@ -288,17 +288,96 @@ static object Describe(string id, YtPipeline.Core.Models.Channel c) => new
     c.VideoLengthTargetMinutes,
     c.VideoLengthMinMinutes,
     c.VideoLengthMaxMinutes,
+    // Every editable field MUST appear here. The UI round-trips whatever this returns straight
+    // back to PUT, so anything omitted is silently dropped the first time a channel is saved —
+    // omitting these two would have wiped the whole template library on the next edit.
+    c.ScriptVoiceRules,
+    c.ScriptTemplates,
     c.ScriptStructure,
     c.VisualStyle,
     c.VoiceNotes,
     c.Voice,
     c.Music,
     c.Youtube,
+    c.Identity,
     // "channel" | "default" | "none". hasImageRule alone was ambiguous: it was true even when
     // the channel had no file of its own and was only inheriting the shared default.
     imageRuleSource = c.ImageRuleSource,
     hasImageRule = c.ImageRuleSource == "channel",
+    // Whether the branding art exists on disk. Read-only: the pngs are files beside the channel
+    // json, not fields in it, so these come back from the loader and are never written.
+    hasAvatar = c.HasAvatar,
+    hasBanner = c.HasBanner,
 };
+
+// Suggests the channel's handle/byline/About/keywords from its persona and tone. Returns the
+// text rather than saving it — the editor drops it into the draft so it can be read and edited
+// before the user commits with Save.
+app.MapPost("/api/channels/{id}/identity/generate", async (string id, CancellationToken ct) =>
+{
+    var writer = app.Services.GetRequiredService<YtPipeline.Stages.Script.ChannelIdentityWriter>();
+    try
+    {
+        var channel = pipeline.Channels.Load(id);
+        return J(await writer.WriteAsync(channel, ct));
+    }
+    catch (FileNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
+    catch (OperationCanceledException) { return Results.StatusCode(499); }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "Writing the identity for '{Id}' failed.", id);
+        return Results.Problem(ex.Message, statusCode: 500);
+    }
+});
+
+// --- Channel branding art ---------------------------------------------------
+// The pngs live beside the channel json (channels/<id>.avatar.png). Generation is a background
+// job like any image work, keyed on the channel id so the existing job log and polling apply.
+
+app.MapGet("/api/channels/{id}/brand/{kind}", (string id, string kind) =>
+{
+    try
+    {
+        var path = pipeline.Channels.BrandImagePath(id, kind);
+        return File.Exists(path) ? Results.File(path, "image/png") : Results.NotFound();
+    }
+    catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
+});
+
+app.MapPost("/api/channels/{id}/brand/{kind}", (string id, string kind) =>
+{
+    try
+    {
+        kind = YtPipeline.Core.Models.BrandImage.Normalize(kind);
+        pipeline.Channels.Load(id);   // fail fast on an unknown channel, before starting a job
+
+        // Same one-job-at-a-time rule the run stages use: two generations would race on one file.
+        if (jobs.ActiveJobFor(id) is { } busy)
+            return Results.Conflict(new
+            {
+                error = $"'{busy.Stage}' is already running for this channel. Wait for it, or stop it first.",
+                stage = busy.Stage,
+                jobId = busy.Id,
+            });
+
+        var job = jobs.Start(id, kind, ct => pipeline.BrandImageAsync(id, kind, ct));
+        return J(new { jobId = job.Id });
+    }
+    catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
+    catch (FileNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
+});
+
+app.MapDelete("/api/channels/{id}/brand/{kind}", (string id, string kind) =>
+{
+    try
+    {
+        var path = pipeline.Channels.BrandImagePath(id, kind);
+        if (File.Exists(path)) File.Delete(path);
+        Log.Information("Brand image '{Kind}' cleared for channel '{Id}'.", kind, id);
+        return J(new { deleted = kind });
+    }
+    catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
+});
 
 // --- Runs -------------------------------------------------------------------
 app.MapGet("/api/runs", () => J(pipeline.Runs.ListManifests()));
@@ -363,7 +442,10 @@ app.MapPost("/api/script", (CreateScriptRequest req) =>
 });
 
 // --- Stages 2-5 (background jobs) -------------------------------------------
-app.MapPost("/api/runs/{id}/stage/{stage}", (string id, string stage, string? privacy, bool force = false) =>
+// `music` applies to the video stage only: false re-assembles voice-only (and drops the music
+// credit from the description), true forces the normal selection, omitted keeps the run's last
+// answer.
+app.MapPost("/api/runs/{id}/stage/{stage}", (string id, string stage, string? privacy, bool force = false, bool? music = null) =>
 {
     var run = pipeline.Runs.Resolve(id);
 
@@ -385,7 +467,7 @@ app.MapPost("/api/runs/{id}/stage/{stage}", (string id, string stage, string? pr
         "script" => ct => pipeline.ScriptAsync(run, ct),
         "images" => ct => pipeline.ImagesAsync(run, ct, regenerate: force),
         "voice" => ct => pipeline.VoiceAsync(run, ct),
-        "video" => ct => pipeline.VideoAsync(run, ct),
+        "video" => ct => pipeline.VideoAsync(run, ct, music),
         "thumbnail" => ct => pipeline.ThumbnailAsync(run, ct),
         "upload" => ct => pipeline.UploadAsync(run, privacy ?? "private", ct),
         // Extra distribution targets. A skipped publish (platform not configured) completes the

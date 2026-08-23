@@ -7,15 +7,74 @@
   "videoLengthTargetMinutes": 3,
   "videoLengthMinMinutes": 3,
   "videoLengthMaxMinutes": 5,
+  "scriptVoiceRules": "Vary sentence length hard. Median about 9 words; roughly a quarter of all sentences under 6 words; almost none over 25. Use bare fragments for emphasis - a noun on its own, or a two-word correction, dropped between longer explanatory sentences. Stay declarative: at most ONE question in the whole script, placed immediately before a number or name is revealed. Second person, present tense - this is happening in the viewer's room, not in a textbook. Prefer 'it is not X, it is Y' reframes over lists. Every claim of scale gets a real quantity with its unit, or a named place and year - never 'very' or 'extremely'. NEVER say 'in this video', 'let's dive in', 'stick around', 'as you can see', or ask for likes or subscribers. No greeting, no sign-off.",
   "scriptStructure": [
-    "VOICE RULES - APPLY THROUGHOUT, THESE MATTER MORE THAN ANY SECTION: Vary sentence length hard. Median about 9 words; roughly a quarter of all sentences under 6 words; almost none over 25. Use bare fragments for emphasis - a noun on its own, or a two-word correction, dropped between longer explanatory sentences. Stay declarative: at most ONE question in the whole script, placed immediately before the number is revealed. Second person, present tense - this is happening in the viewer's room, not in a textbook. Prefer 'it is not X, it is Y' reframes over lists. Every claim of scale gets a real quantity with its unit, or a named place and year - never 'very' or 'extremely'. NEVER say 'in this video', 'let's dive in', 'stick around', 'as you can see', or ask for likes or subscribers. No greeting, no sign-off.",
-    "COLD OPEN (0:00-0:25, ~55-70 words): Put the viewer in a situation they are plausibly in right now, involving the everyday object. Then reverse it - the object they trust is making things worse. Escalate in a short ladder: not slightly worse, seriously worse, potentially fatally worse. State the counterintuitive claim plainly before 25 seconds.",
-    "DEFER (0:25-0:40, ~30-40 words): Say there is a specific number, or threshold, that almost nobody has heard of - without naming it. Then defer explicitly: to understand why this object is dangerous, you first have to understand how the underlying system actually works.",
-    "REFUTE AND REBUILD (0:40-1:40, ~130-190 words): Name the answer most people would give, then say it is wrong. Rebuild the real mechanism in exactly 3-4 ordered links, each depending on the one before. Anchor it with concrete quantities - watts, degrees, litres, seconds - not vague scale words.",
-    "NAME IT AND REVEAL THE NUMBER (1:40-2:40, ~110-170 words): Name the metric or mechanism at the centre of the danger. Give ONE concrete image of how it is physically measured or what it means at the extremes. Then the single question of the script - what is that number - and answer it immediately. Explain in plain physics why crossing it is unsurvivable: what gradient disappears, what process stops, what fails first.",
-    "RETURN TO THE TITLE OBJECT (2:40-3:30, ~80-130 words): Only now explain the object itself. Why it genuinely helps under normal conditions, then the exact crossover point where it flips to actively harmful. Support it with one real study or measured finding.",
-    "ALREADY HAPPENING, AND WORSE (3:30-4:20, ~70-120 words): Break the assumption that this is hypothetical with one named place and a dated measurement. Then the twist: the headline number was the optimistic one - real-world harm starts lower once age, exertion or health are accounted for. Name precisely who is at risk by occupation or circumstance.",
-    "CALLBACK CLOSE (4:20-4:40, ~35-50 words): Reframe the title in one line - the object was never the villain, the conditions were. Then return to the exact image from the cold open and land the reversal: the thing they reach for to save themselves is the thing that makes it worse. Stop there."
+    "COLD OPEN (~13%): Put the viewer in a situation they are plausibly in right now involving the everyday object, then reverse it - the object they trust is making things worse. Escalate in a short ladder and state the counterintuitive claim before 25 seconds.",
+    "DEFER (~8%): Say there is a specific number or threshold almost nobody has heard of, without naming it, then defer: to understand the danger you first have to understand how the underlying system works.",
+    "REFUTE AND REBUILD (~30%): Name the answer most people would give, say it is wrong, and rebuild the real mechanism in 3-4 ordered links anchored with concrete quantities.",
+    "NAME IT AND REVEAL (~25%): Name the metric at the centre of the danger, give ONE concrete image of how it is measured, ask the single question of the script, and answer it immediately with the physics of why crossing it is unsurvivable.",
+    "RETURN TO THE OBJECT (~14%): Only now explain the object - why it helps normally, the exact crossover where it flips to harmful, and one real study or measured finding.",
+    "CALLBACK CLOSE (~10%): Reframe the title in one line, return to the exact image from the cold open, and land the reversal. Stop there."
+  ],
+  "scriptTemplates": [
+    {
+      "name": "threshold-reveal",
+      "lastUsedUtc": "2026-08-12T03:38:03.5243274Z",
+      "sections": [
+        "COLD OPEN (~13%): Put the viewer in a situation they are plausibly in right now involving the everyday object. Reverse it - the thing they trust is making it worse. Escalate in a short ladder: not slightly worse, seriously worse, potentially fatally worse. State the counterintuitive claim plainly and early.",
+        "DEFER (~8%): Say there is a specific number or threshold that almost nobody has heard of, WITHOUT naming it. Then defer explicitly: to understand why this object is dangerous, you first have to understand how the underlying system actually works.",
+        "REFUTE AND REBUILD (~29%): Name the answer most people would give, then say it is wrong. Rebuild the real mechanism in 3-4 ordered links, each depending on the one before, anchored with real quantities rather than scale words.",
+        "NAME IT AND REVEAL THE NUMBER (~25%): Name the metric or mechanism at the centre of the danger. Give ONE concrete image of how it is physically measured. Then the single question of the script - what is that number - answered immediately, with the plain physics of what gradient disappears and what fails first.",
+        "RETURN TO THE TITLE OBJECT (~15%): Only now explain the object itself. Why it genuinely helps under normal conditions, then the exact crossover point where it flips to actively harmful, supported by one real study or measured finding.",
+        "CALLBACK CLOSE (~10%): Reframe the title in one line - the object was never the villain, the conditions were. Return to the exact image from the cold open and land the reversal. Stop there."
+      ]
+    },
+    {
+      "name": "incident-first",
+      "lastUsedUtc": "2026-08-12T04:32:20.575699Z",
+      "sections": [
+        "THE INCIDENT (~20%): Open on a single real, dated, located event where this ordinary object killed or nearly killed someone. Tell it plainly and without drama - what the person was doing, what they reasonably believed, what actually happened. No mechanism yet.",
+        "THE OBVIOUS EXPLANATION, DISMISSED (~14%): State the explanation any reasonable person would reach for after hearing that, then rule it out with a fact that does not fit. The mystery is what makes the physics worth hearing.",
+        "WORK BACKWARD (~30%): Reconstruct the real chain of events in reverse - the failure, then what allowed it, then the condition underneath that. Each step should make the previous one inevitable rather than unlucky.",
+        "THE CONDITION THAT MADE IT POSSIBLE (~22%): Name the measurable condition or threshold that turned an ordinary object into a lethal one, and give its number. Establish how often that condition occurs, with a place and a frequency.",
+        "IT WAS NOT AN ACCIDENT (~14%): Reframe: the person did nothing wrong, and the object was not faulty. Land that the same conditions exist elsewhere, and say plainly who is standing in them right now. No sign-off."
+      ]
+    },
+    {
+      "name": "twin-comparison",
+      "lastUsedUtc": "2026-08-16T20:33:07.2163702Z",
+      "sections": [
+        "TWO OF THE SAME THING (~15%): Present two near-identical versions of the object, side by side in plain description. State that one is harmless and one can kill, and that almost nobody can tell which from looking.",
+        "WHY THEY LOOK IDENTICAL (~15%): Explain what the two genuinely share - purpose, appearance, material, everyday use - so the difference cannot be dismissed as obvious. Withhold the difference.",
+        "THE ONE VARIABLE (~30%): Reveal the single property that differs, and build why it matters from first principles in ordered links, with real quantities. This is the spine of the video.",
+        "THE THRESHOLD (~22%): Give the measurable point at which that variable becomes dangerous, as a number with a unit, and what physically fails past it. Add one real measurement, study or dated case.",
+        "HOW TO TELL THEM APART (~10%): Give the one practical test or marking that distinguishes safe from lethal - the single useful takeaway of the whole video.",
+        "CLOSE ON THE PAIR (~8%): Return to the two objects from the opening, now distinguishable, and land the reversal in one line. Stop there."
+      ]
+    },
+    {
+      "name": "safety-that-fails",
+      "lastUsedUtc": "2026-08-19T05:11:57.30772Z",
+      "sections": [
+        "THE THING THAT PROTECTS YOU (~15%): Open on a safety measure, device or habit the viewer trusts, and describe honestly and specifically how it protects them. Build genuine confidence in it.",
+        "THE ASSUMPTION UNDERNEATH (~17%): Reveal the condition that protection quietly depends on - a temperature, a pressure, a concentration, an interval. State that it holds almost all the time.",
+        "WHEN THE ASSUMPTION BREAKS (~30%): Walk through what happens when that condition no longer holds, in ordered mechanical steps. The protection does not merely stop working; explain why it starts making things worse.",
+        "THE MEASURED CROSSOVER (~20%): Give the number at which protection becomes harm, and one real study, standard or dated incident showing it happening in practice.",
+        "WHAT ACTUALLY WORKS (~10%): State plainly what does help under those conditions, and be honest if the answer is expensive, unavailable, or simply leaving.",
+        "CLOSE (~8%): One line reframing the protection as conditional rather than absolute, returning to the opening image. Stop there."
+      ]
+    },
+    {
+      "name": "slow-dose",
+      "sections": [
+        "NOTHING HAPPENS (~15%): Open on the viewer using the object exactly as intended, with no immediate effect whatsoever. State plainly that a single exposure is harmless - and that this is precisely the problem.",
+        "WHAT ACCUMULATES (~20%): Name what builds up - in the body, the material, or the room - and explain the mechanism by which it fails to clear. Concrete quantities per exposure.",
+        "THE MATH OF REPETITION (~25%): Take the per-exposure amount and carry it forward across a realistic number of exposures - per day, per year, per career. Escalate the specificity in steps rather than stating a total once.",
+        "THE THRESHOLD NOBODY NOTICES (~20%): Give the measured level at which damage becomes irreversible, and the fact that no symptom marks the crossing. One real occupational standard, study or dated finding.",
+        "WHO IS ALREADY PAST IT (~12%): Identify precisely who accumulates fastest by occupation or circumstance, with a real number of affected people.",
+        "CLOSE (~8%): Reframe - it was never one exposure, it was every exposure. Return to the harmless-looking opening moment. Stop there."
+      ]
+    }
   ],
   "visualStyle": "MS Paint stick-figure aesthetic, 16:9, flat solid colors, thick black outlines, big hand-lettered title text, white background",
   "voiceNotes": "Measured British RP narration, unhurried, roughly 140-150 words per minute. Lands hard on numbers and on the short fragment sentences. Falls slightly at the end of each fact rather than rising - statements, never questions. No enthusiasm, no smile in the voice, no dramatic whisper. The gravity comes from the facts being stated plainly.",
@@ -25,7 +84,7 @@
     "modelId": "eleven_v3",
     "stability": 0.55,
     "similarityBoost": 0.8,
-    "wordsPerMinute": 112.0
+    "wordsPerMinute": 120.0
   },
   "music": true,
   "youtube": {
@@ -42,5 +101,14 @@
     ],
     "titlePattern": "Why {topic} Can Kill You",
     "descriptionFooter": "\n\nDeath by Design - the ordinary objects that turn lethal when conditions change.\n\nSources are named in the narration. Nothing here is medical advice."
+  },
+  "identity": {
+    "handle": "",
+    "bio": "",
+    "byline": "",
+    "keywords": [],
+    "links": [],
+    "avatarPrompt": "",
+    "bannerPrompt": ""
   }
 }

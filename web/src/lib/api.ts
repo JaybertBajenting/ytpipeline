@@ -23,6 +23,29 @@ export interface YoutubeDefaults {
   descriptionFooter: string;
 }
 
+export interface ChannelLink {
+  label: string;
+  url: string;
+}
+
+/**
+ * How the CHANNEL presents on YouTube — separate from persona/tone, which describe how the videos
+ * are written. Recorded for you to copy into Studio; nothing is pushed automatically.
+ */
+export interface ChannelIdentity {
+  /** Without the leading @. */
+  handle: string;
+  /** The About-page text. YouTube caps this at 1000 characters. */
+  bio: string;
+  /** One-liner under the channel name; falls back to the tagline when empty. */
+  byline: string;
+  keywords: string[];
+  links: ChannelLink[];
+  /** Optional extra art direction, layered on the channel's image rule. */
+  avatarPrompt: string;
+  bannerPrompt: string;
+}
+
 export interface Channel {
   id: string;
   name: string;
@@ -40,10 +63,14 @@ export interface Channel {
   voice: ChannelVoice;
   music: boolean;
   youtube: YoutubeDefaults;
+  identity: ChannelIdentity;
   /** True only when the channel has its OWN <id>.image.md — not when inheriting the default. */
   hasImageRule: boolean;
   /** Which rule is actually in force: its own file, the shared default, or nothing. */
   imageRuleSource: "channel" | "default" | "none";
+  /** Read-only: the branding pngs are files beside the channel json, not fields in it. */
+  hasAvatar: boolean;
+  hasBanner: boolean;
 }
 
 // ---- Runs ------------------------------------------------------------------
@@ -55,6 +82,12 @@ export interface StageStatus {
   count?: number;
   seconds?: number;
   musicTracks?: string[];
+  musicCredits?: string[];
+  /**
+   * Video stage: this run's background-music choice, remembered across re-assemblies.
+   * Undefined means "follow the channel setting" — it's only written once you pick.
+   */
+  music?: boolean;
   /** Publish targets: platform post id, permalink, and why a publish did nothing. */
   postId?: string;
   url?: string;
@@ -158,6 +191,8 @@ export interface AppSettings {
   imageProvider: ImageProvider;
   /** Provider that finishes the job if the primary stops short. "" = disabled. */
   imageFallbackProvider: ImageProvider | "";
+  /** Backend for the publish thumbnail. Empty follows imageProvider. */
+  thumbnailProvider: ImageProvider | "";
   gflow: GflowSettings;
   voiceGain: number;
   musicEnabled: boolean;
@@ -276,10 +311,12 @@ export const api = {
   generateScript: (channel: string, topic: string, auto: boolean) =>
     http.post<{ jobId: string; runId: string }>("/api/script", { channel, topic, auto }).then((r) => r.data),
 
-  runStage: (runId: string, stage: StageName, privacy?: string, force?: boolean) => {
+  runStage: (runId: string, stage: StageName, privacy?: string, force?: boolean, music?: boolean) => {
     const qs = new URLSearchParams();
     if (privacy) qs.set("privacy", privacy);
     if (force) qs.set("force", "true");
+    // Explicit false is meaningful here, so this tests for undefined rather than falsiness.
+    if (music !== undefined) qs.set("music", String(music));
     const suffix = qs.toString() ? `?${qs}` : "";
     return http.post<{ jobId: string }>(`/api/runs/${runId}/stage/${stage}${suffix}`).then((r) => r.data);
   },
@@ -297,11 +334,35 @@ export const api = {
   secrets: () => http.get<SecretsView>("/api/secrets").then((r) => r.data),
   saveSecrets: (s: SecretsUpdate) => http.put<SecretsView>("/api/secrets", s).then((r) => r.data),
 
-  // File URLs (cache-busted where the file can change)
+  // File URLs (cache-busted where the file can change).
+  //
+  // voice.mp3 and final.mp4 are overwritten in place every time you re-render or re-assemble, so
+  // the URL alone is not enough: with the page already open the browser keeps serving whatever it
+  // buffered for that same src and the player shows the OLD file — a re-assembled 3:32 video
+  // stuck reading as 10 seconds. Pass the stage's completedUtc, which changes exactly when the
+  // file is rewritten. (Deliberately not the query's dataUpdatedAt: that ticks on every poll and
+  // would reload the player mid-playback.)
+  // Suggests handle/byline/bio/keywords from the channel's persona. Returns the text without
+  // saving, so the editor can drop it into the draft for review. Slow — it shells out to Claude.
+  generateIdentity: (channelId: string) =>
+    http.post<ChannelIdentity>(`/api/channels/${channelId}/identity/generate`).then((r) => r.data),
+
+  // Channel branding art. Cache-busted for the same reason the run media is: the png is
+  // overwritten in place by a regenerate, so a fixed URL would keep showing the old art.
+  brandUrl: (channelId: string, kind: "avatar" | "banner", bust?: string | number) =>
+    `/api/channels/${channelId}/brand/${kind}${bust ? `?t=${encodeURIComponent(String(bust))}` : ""}`,
+  generateBrand: (channelId: string, kind: "avatar" | "banner") =>
+    http.post<{ jobId: string }>(`/api/channels/${channelId}/brand/${kind}`).then((r) => r.data),
+  clearBrand: (channelId: string, kind: "avatar" | "banner") =>
+    http.delete(`/api/channels/${channelId}/brand/${kind}`).then((r) => r.data),
+
   imageUrl: (runId: string, name: string) => `/api/runs/${runId}/image/${encodeURIComponent(name)}`,
-  audioUrl: (runId: string) => `/api/runs/${runId}/audio`,
-  videoUrl: (runId: string) => `/api/runs/${runId}/video`,
-  thumbnailUrl: (runId: string, bust = 0) => `/api/runs/${runId}/thumbnail${bust ? `?t=${bust}` : ""}`,
+  audioUrl: (runId: string, bust?: string | null) =>
+    `/api/runs/${runId}/audio${bust ? `?t=${encodeURIComponent(bust)}` : ""}`,
+  videoUrl: (runId: string, bust?: string | null) =>
+    `/api/runs/${runId}/video${bust ? `?t=${encodeURIComponent(bust)}` : ""}`,
+  thumbnailUrl: (runId: string, bust: string | number = 0) =>
+    `/api/runs/${runId}/thumbnail${bust ? `?t=${encodeURIComponent(bust)}` : ""}`,
 };
 
 // ---- Derived helpers --------------------------------------------------------
@@ -344,6 +405,17 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
+/**
+ * A blank identity. Channel files written before this section existed have no `identity` key at
+ * all, so the editor substitutes this rather than reading through undefined.
+ */
+export function emptyIdentity(): ChannelIdentity {
+  return { handle: "", bio: "", byline: "", keywords: [], links: [], avatarPrompt: "", bannerPrompt: "" };
+}
+
+/** YouTube's own limit on the About text — surfaced so the field can warn before Studio rejects it. */
+export const BIO_MAX_CHARS = 1000;
+
 /** Starting point for a new channel — a usable shape, not an empty form. */
 export function newChannelTemplate(name: string): Partial<Channel> {
   return {
@@ -361,5 +433,6 @@ export function newChannelTemplate(name: string): Partial<Channel> {
     voice: { voiceId: "", voiceName: "", modelId: "", stability: null, similarityBoost: null },
     music: true,
     youtube: { categoryId: "27", defaultTags: [], titlePattern: "{topic}", descriptionFooter: "" },
+    identity: emptyIdentity(),
   };
 }

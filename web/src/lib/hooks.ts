@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   api, type AppSettings, type Channel, type ChannelPublishUpdate, type Job, type SecretsUpdate,
 } from "./api";
@@ -81,6 +81,57 @@ export function useSaveChannel() {
         prev?.map((c) => (c.id === saved.id ? saved : c)) ?? prev);
     },
   });
+}
+
+export type BrandKind = "avatar" | "banner";
+
+/**
+ * Generating a channel's avatar or banner. Image work is slow, so the server runs it as a
+ * background job; this polls that job and refreshes the channel list when it lands, which is what
+ * flips hasAvatar/hasBanner and swaps the preview to the new png.
+ */
+export function useBrandImage(channelId: string) {
+  const qc = useQueryClient();
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [running, setRunning] = useState<BrandKind | null>(null);
+
+  const jobQ = useQuery({
+    queryKey: ["job", jobId],
+    queryFn: () => api.job(jobId!),
+    enabled: !!jobId,
+    refetchInterval: (q) => (q.state.data?.status === "running" ? 1500 : false),
+    retry: 30,
+    retryDelay: 1500,
+  });
+
+  const status = jobQ.data?.status;
+  useEffect(() => {
+    if (!status || status === "running") return;
+    qc.invalidateQueries({ queryKey: ["channels"] });
+    setRunning(null);
+    // The job id is kept so a failure's log stays on screen; only the busy flag clears.
+  }, [status, qc]);
+
+  const generate = useMutation({
+    mutationFn: async (kind: BrandKind) => ({ ...(await api.generateBrand(channelId, kind)), kind }),
+    onSuccess: ({ jobId: id, kind }) => { setJobId(id); setRunning(kind); },
+  });
+
+  const clear = useMutation({
+    mutationFn: (kind: BrandKind) => api.clearBrand(channelId, kind),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["channels"] }),
+  });
+
+  return { generate, clear, job: jobQ.data as Job | undefined, running };
+}
+
+/**
+ * Writes the channel's handle/byline/About/keywords with Claude. Deliberately NOT cached or
+ * auto-saved: the result goes into the editor's draft so it can be read and edited, and only
+ * reaches disk when the user presses Save.
+ */
+export function useGenerateIdentity(channelId: string) {
+  return useMutation({ mutationFn: () => api.generateIdentity(channelId) });
 }
 
 export const useSecrets = () => useQuery({ queryKey: ["secrets"], queryFn: api.secrets });
@@ -165,8 +216,9 @@ export function useGenerateScript() {
 export function useRunStage(runId: string) {
   const setJob = useUi((s) => s.setJob);
   return useMutation({
-    mutationFn: ({ stage, privacy, force }: { stage: any; privacy?: string; force?: boolean }) =>
-      api.runStage(runId, stage, privacy, force),
+    mutationFn: ({ stage, privacy, force, music }:
+      { stage: any; privacy?: string; force?: boolean; music?: boolean }) =>
+      api.runStage(runId, stage, privacy, force, music),
     onSuccess: ({ jobId }) => setJob(runId, jobId),
   });
 }

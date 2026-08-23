@@ -171,12 +171,26 @@ public sealed class Pipeline(
     }
 
     // ----- Stage 4 -----------------------------------------------------------
-    public async Task VideoAsync(Run run, CancellationToken ct)
+    /// <summary>
+    /// Assembles final.mp4.
+    /// </summary>
+    /// <param name="music">
+    /// Per-run override for background music. <c>false</c> assembles a voice-only video,
+    /// <c>true</c> forces the normal selection, and <c>null</c> keeps whatever this run chose last
+    /// time (falling back to the channel's own <see cref="Channel.Music"/> setting). The choice is
+    /// remembered on the manifest so a later re-assembly — from another tab, or the CLI — doesn't
+    /// silently put the music back.
+    /// </param>
+    public async Task VideoAsync(Run run, CancellationToken ct, bool? music = null)
     {
         var channel = channels.Load(run.Channel);
         var script = runs.LoadScript(run);
         var images = LoadImagePaths(run, script);
         logger.LogInformation("[video] assembling final.mp4");
+
+        // A caller that said nothing inherits this run's previous answer, so "no music" survives
+        // a plain re-assemble.
+        var wantMusic = music ?? runs.LoadManifest(run).Stages.Video.Get<bool?>("music");
 
         // Build a music playlist sized to cover the full video length.
         // Returns empty list (no music) if disabled, library is empty, or selection fails.
@@ -190,7 +204,18 @@ public sealed class Pipeline(
             m.Stages.Video.CompletedUtc = null;
         });
 
-        var musicPaths = await musicSelector.SelectAsync(channel, script, audioSeconds, ct);
+        IReadOnlyList<string> musicPaths;
+        if (wantMusic == false)
+        {
+            logger.LogInformation("Background music turned off for this video — assembling voice-only.");
+            musicPaths = [];
+        }
+        else
+        {
+            // wantMusic == true is an explicit ask for this one video, so it overrides a channel
+            // that has music switched off. Null just follows the channel as before.
+            musicPaths = await musicSelector.SelectAsync(channel, script, audioSeconds, ct, wantMusic);
+        }
 
         var musicNames = musicPaths
             .Select(p => MusicSelector.StripLabel(Path.GetFileNameWithoutExtension(p)))
@@ -199,20 +224,45 @@ public sealed class Pipeline(
         runs.UpdateManifest(run, m =>
         {
             m.Stages.Video.MarkDone(videoPath);
+            // Cleared rather than left alone when there's no music: these describe the mp4 that was
+            // just written, so stale entries from a previous musical assembly would be a lie.
             if (musicNames.Count > 0) m.Stages.Video.Set("musicTracks", musicNames);
-            m.Publish.Title = script.Title;
+            else m.Stages.Video.Clear("musicTracks");
+            // The topic as typed, not whatever the script generator came back with. Enforced at
+            // generation too, but repeated here so runs whose script.json was written by older
+            // code get the right title from a re-assemble alone — no script regeneration needed.
+            m.Publish.Title = string.IsNullOrWhiteSpace(run.Topic) ? script.Title : run.Topic.Trim();
             // The music libraries require artist + title in the description or the upload can
             // collect a Content ID claim, so the credit is composed from the tracks actually
-            // mixed in rather than left to be remembered at upload time.
+            // mixed in rather than left to be remembered at upload time. Rebuilt from the script's
+            // own description each time, so dropping the music also drops the credit.
             m.Publish.Description = MusicCredit.Append(script.Description, musicPaths);
             m.Publish.Tags = script.Tags;
             if (musicPaths.Count > 0)
                 m.Stages.Video.Set("musicCredits", MusicCredit.Lines(musicPaths));
+            else
+                m.Stages.Video.Clear("musicCredits");
+
+            if (wantMusic is { } w) m.Stages.Video.Set("music", w);
+            else m.Stages.Video.Clear("music");
         });
 
         // Produce the publish thumbnail if we don't already have one.
         if (!File.Exists(run.ThumbnailPath))
             await GenerateThumbnailInternal(run, channel, script, ct);
+    }
+
+    /// <summary>
+    /// Generates a channel's avatar or banner art. Not part of the five stages — this belongs to
+    /// the channel, not to any run, and is produced on demand from the Channels screen.
+    /// </summary>
+    public async Task<string> BrandImageAsync(string channelId, string kind, CancellationToken ct)
+    {
+        kind = BrandImage.Normalize(kind);
+        var channel = channels.Load(channelId);
+        var target = channels.BrandImagePath(channelId, kind);
+        logger.LogInformation("[brand] {Kind} for {Channel}", kind, channel.Name);
+        return await imageGen.GenerateBrandImageAsync(channel, kind, target, ct);
     }
 
     /// <summary>Regenerate the YouTube thumbnail on demand.</summary>
@@ -247,6 +297,7 @@ public sealed class Pipeline(
         // Publish with the description the video stage composed — it carries the required music
         // credit. Falls back to the script's own text for runs assembled before that existed.
         script.Description = DescriptionForPublish(run, script);
+        script.Title = TitleForPublish(run, script);
 
         var videoId = await uploader.UploadAsync(run, channel, script, run.VideoPath, privacy, ct);
         runs.UpdateManifest(run, m =>
@@ -281,6 +332,7 @@ public sealed class Pipeline(
         var script = runs.LoadScript(run);
         // Same credit requirement applies off YouTube — Facebook also runs rights matching.
         script.Description = DescriptionForPublish(run, script);
+        script.Title = TitleForPublish(run, script);
         logger.LogInformation("publish → {Platform} — {Channel}", publisher.Platform, channel.Name);
 
         var result = await publisher.PublishAsync(run, channel, script, run.VideoPath, ct);
@@ -366,6 +418,14 @@ public sealed class Pipeline(
         var stored = runs.LoadManifest(run).Publish.Description;
         return string.IsNullOrWhiteSpace(stored) ? script.Description : stored;
     }
+
+    /// <summary>
+    /// The title to publish with: the topic exactly as it was typed. A script generated before the
+    /// title was pinned still carries whatever the model invented, so this is applied at publish
+    /// time too rather than trusting <see cref="ScriptDocument.Title"/>.
+    /// </summary>
+    private static string TitleForPublish(Run run, ScriptDocument script) =>
+        string.IsNullOrWhiteSpace(run.Topic) ? script.Title : run.Topic.Trim();
 
     /// <summary>Manifest slot for a platform's status.</summary>
     private static StageStatus Slot(Manifest m, string platform) =>

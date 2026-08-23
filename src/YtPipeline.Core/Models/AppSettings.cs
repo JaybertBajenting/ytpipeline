@@ -24,6 +24,17 @@ public sealed class AppSettings
     public string ImageFallbackProvider { get; set; } = "";
 
     /// <summary>
+    /// Backend for the single publish THUMBNAIL, when it should differ from the frame provider.
+    /// Empty follows <see cref="ImageProvider"/>.
+    /// <para>
+    /// Worth splitting because the two jobs reward different backends: frames are bulk work where
+    /// throughput wins, while a thumbnail is one image that has to obey a long, fussy style rule.
+    /// An agent that reads the whole rule can beat a faster renderer that only skims it.
+    /// </para>
+    /// </summary>
+    public string ThumbnailProvider { get; set; } = "";
+
+    /// <summary>
     /// How long a provider stays benched after reporting its quota exhausted, before the next run
     /// tries it again. Doubles on each retry that finds it still out, capped at 8 hours. Kept
     /// short by default because the point is to discover the real reset, not predict it.

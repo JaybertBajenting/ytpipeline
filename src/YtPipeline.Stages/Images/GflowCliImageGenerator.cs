@@ -154,6 +154,33 @@ public sealed class GflowCliImageGenerator(
         return run.ThumbnailPath;
     }
 
+    public async Task<string> GenerateBrandImageAsync(
+        Channel channel, string kind, string targetPath, CancellationToken ct)
+    {
+        kind = BrandImage.Normalize(kind);
+        Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
+        var cfg = settings.Current.Gflow;
+
+        logger.LogInformation("Generating {Kind} for '{Channel}' ({Size}).",
+            kind, channel.Name, BrandImage.SizeLabel(kind));
+
+        // Written straight to a temp file and moved on success, so a failed regeneration leaves the
+        // channel's existing art intact instead of deleting it first and coming back empty-handed.
+        var temp = targetPath + ".new";
+        if (File.Exists(temp)) { try { File.Delete(temp); } catch { } }
+
+        var ok = await RunGflowAsync(BrandPrompt.Build(channel, kind), temp, cfg, ct, BrandImage.Aspect(kind));
+        if (!ok || !File.Exists(temp))
+        {
+            if (File.Exists(temp)) { try { File.Delete(temp); } catch { } }
+            throw new InvalidOperationException($"gflow finished but produced no {kind} for '{channel.Id}'.");
+        }
+
+        File.Move(temp, targetPath, overwrite: true);
+        logger.LogInformation("{Kind} -> {Path}", kind, targetPath);
+        return targetPath;
+    }
+
     // -------------------------------------------------------------------------
 
     private async Task<bool> GenerateOneAsync(
@@ -179,7 +206,12 @@ public sealed class GflowCliImageGenerator(
     }
 
     /// <summary>Invokes <c>gflow image t2i "&lt;prompt&gt;" -o &lt;target&gt;</c>. Returns false on failure.</summary>
-    private async Task<bool> RunGflowAsync(string prompt, string target, GflowSettings cfg, CancellationToken ct)
+    /// <param name="aspect">
+    /// Overrides the configured aspect for this one call. Needed for channel art, which is square
+    /// (avatar) rather than the 16:9 the video frames are locked to.
+    /// </param>
+    private async Task<bool> RunGflowAsync(
+        string prompt, string target, GflowSettings cfg, CancellationToken ct, string? aspect = null)
     {
         var args = new List<string>(cfg.ArgsTemplate)
         {
@@ -190,7 +222,8 @@ public sealed class GflowCliImageGenerator(
 
         // gflow defaults to --aspect 9:16 (vertical) and --model nano2. Both must be set
         // explicitly: vertical frames would be sideways in a 16:9 video.
-        if (!string.IsNullOrWhiteSpace(cfg.Aspect)) args.AddRange(["--aspect", cfg.Aspect]);
+        var wantAspect = string.IsNullOrWhiteSpace(aspect) ? cfg.Aspect : aspect;
+        if (!string.IsNullOrWhiteSpace(wantAspect)) args.AddRange(["--aspect", wantAspect]);
         if (!string.IsNullOrWhiteSpace(cfg.Model)) args.AddRange(["--model", cfg.Model]);
         if (!string.IsNullOrWhiteSpace(cfg.Project)) args.AddRange(["--project", cfg.Project]);
         args.AddRange(cfg.ExtraArgs);

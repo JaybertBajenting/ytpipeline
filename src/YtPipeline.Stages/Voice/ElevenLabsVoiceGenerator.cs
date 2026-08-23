@@ -28,6 +28,8 @@ public sealed class ElevenLabsVoiceGenerator(
         var modelId = Pick(cv.ModelId, options.ModelId);
         var stability = cv.Stability ?? options.Stability;
         var similarity = cv.SimilarityBoost ?? options.SimilarityBoost;
+        // Null leaves the voice at its natural pace, exactly as before this setting existed.
+        var speed = cv.Speed;
 
         if (string.IsNullOrWhiteSpace(voiceId))
             throw new InvalidOperationException(
@@ -40,11 +42,12 @@ public sealed class ElevenLabsVoiceGenerator(
             throw new InvalidOperationException("Script has no narration to voice.");
 
         logger.LogInformation(
-            "Voicing {Words} words of narration with voice {Voice}{Named} (model {Model}).",
+            "Voicing {Words} words with voice {Voice}{Named} (model {Model}, speed {Speed}).",
             narration.Split(' ').Length,
             voiceId,
             string.IsNullOrWhiteSpace(cv.VoiceName) ? "" : $" '{cv.VoiceName}'",
-            modelId);
+            string.IsNullOrWhiteSpace(modelId) ? "default" : modelId,
+            speed is { } s ? s.ToString("0.00") : "natural");
 
         var request = new TtsRequest
         {
@@ -54,6 +57,7 @@ public sealed class ElevenLabsVoiceGenerator(
             {
                 Stability = stability,
                 SimilarityBoost = similarity,
+                Speed = speed,
             },
         };
 

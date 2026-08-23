@@ -180,6 +180,18 @@ public sealed class ClaudeCliScriptGenerator(
                     "Script still short ({Words} words) after expansion — proceeding with what we have.", words);
         }
 
+        // The typed topic is the title, full stop. The prompt asks for it verbatim, but asking is
+        // not a guarantee — and the expand path above swaps in a whole fresh Claude response with
+        // its own invented title, so this has to be the last word. Everything downstream (publish
+        // title, YouTube/Facebook upload, thumbnail and music prompts) reads script.Title.
+        var requested = (topic ?? "").Trim();
+        if (requested.Length > 0 && !string.Equals(script.Title?.Trim(), requested, StringComparison.Ordinal))
+        {
+            logger.LogInformation(
+                "Title kept as typed: '{Topic}' (model returned '{Returned}').", requested, script.Title);
+            script.Title = requested;
+        }
+
         logger.LogInformation("Script '{Title}' — {Beats} beats, {Words} words.", script.Title, script.Beats.Count, words);
         return script;
     }
@@ -206,6 +218,14 @@ public sealed class ClaudeCliScriptGenerator(
         {
             sb.AppendLine("=== CHANNEL VOICE (write as though this channel is speaking) ===");
             foreach (var (label, value) in identity) sb.AppendLine($"- {label}: {value!.Trim()}");
+            sb.AppendLine();
+        }
+
+        // Sent with every template, so rotating structures never costs the channel its voice.
+        if (!string.IsNullOrWhiteSpace(channel.ScriptVoiceRules))
+        {
+            sb.AppendLine("=== SENTENCE RULES (these matter more than any section) ===");
+            sb.AppendLine(channel.ScriptVoiceRules.Trim());
             sb.AppendLine();
         }
 
@@ -280,12 +300,16 @@ public sealed class ClaudeCliScriptGenerator(
         sb.AppendLine($"- PACING (CRITICAL — this must be a FAST-paced edit): break the narration into VERY short beats. Each beat should be only about 1.5 to 2.5 seconds of speech — roughly 4 to 9 spoken words, i.e. a single short phrase, NOT a whole sentence. NEVER let a beat exceed ~10 words. Split long sentences into several beats at natural pause points (commas, conjunctions, clauses). There is exactly one image per beat, so the more beats you make, the more the visuals change — aim for a brand-new visual every couple of seconds. A {target.Min}–{target.Max} word script should therefore have roughly {target.ApproxBeats}-{target.ApproxBeatsMax} beats.");
         sb.AppendLine("- The beats' narration, read in order start to finish, must read as the complete, natural voiceover (they are concatenated and spoken as-is).");
         sb.AppendLine("- Open with a hook, build the topic clearly in the middle, and end with a short wrap-up.");
-        sb.AppendLine("- Write a strong, clickable title (<= 100 chars) and a useful YouTube description.");
+        // The typed topic IS the title. Claude used to be asked for a "strong, clickable title" and
+        // duly rewrote "Why a Light Switch can kill you" into something else entirely — which is not
+        // its call to make. Write the script to the given title instead of inventing a new one.
+        sb.AppendLine($"- TITLE: the video is already titled \"{topic}\". Copy that EXACTLY into the title field — same wording, same order, same capitalisation. Do NOT reword, extend, shorten, add a subtitle or parenthetical, or make it more clickable. Write the script so it delivers on that exact title.");
+        sb.AppendLine("- Write a useful YouTube description.");
         sb.AppendLine();
         sb.AppendLine("Return ONLY a single JSON object (no markdown, no prose, no code fences) with this exact shape:");
         sb.AppendLine($$"""
         {
-          "title": "string, <= 100 chars",
+          "title": "the TOPIC above, copied verbatim — not a rewritten or improved version of it",
           "description": "string, a few sentences for the YouTube description",
           "tags": ["string", "..."],
           "beats": [
