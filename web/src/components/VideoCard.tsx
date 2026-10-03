@@ -1,20 +1,14 @@
 import {
-  CalendarDays, Camera, CheckCircle2, Film, Image as ImageIcon, Mic, MonitorPlay, Music,
-  Rocket, Square, ThumbsUp, Trash2, Volume2, VolumeX,
+  CalendarDays, Camera, CheckCircle2, ChevronRight, Cloud, CloudDownload, CloudUpload, Film,
+  FolderOpen, MonitorPlay, Music, Rocket, Square, ThumbsUp, Trash2, Volume2, VolumeX,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { api, stagesDone, type Manifest, type StageName, type StageStatus } from "@/lib/api";
-import { useCancelJob, useJob, useRunStage } from "@/lib/hooks";
+import {
+  useCancelJob, useDriveTransfer, useJob, useRevealVideo, useRunStage, useSettings,
+} from "@/lib/hooks";
 import { useUi } from "@/lib/store";
-import { Badge, Button, Card, Progress, Spinner } from "./ui";
-import { cn } from "@/lib/utils";
-
-const STAGE_ICONS = [
-  { key: "script", label: "Script", Icon: Mic },
-  { key: "voice",  label: "Voice",  Icon: Volume2 },
-  { key: "images", label: "Images", Icon: ImageIcon },
-  { key: "video",  label: "Video",  Icon: Film },
-] as const;
+import { Badge, Button, Card, Menu, MenuDivider, MenuItem, MenuLabel, Progress, Spinner } from "./ui";
 
 function relative(iso: string) {
   const then = new Date(iso).getTime();
@@ -28,18 +22,34 @@ function relative(iso: string) {
   return new Date(iso).toLocaleDateString();
 }
 
+/** Seconds as m:ss, the way YouTube shows a length. */
+function duration(seconds: number) {
+  const s = Math.round(seconds);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
 /**
- * One video in the grid. The preview and body open the detail view; the publish row does not,
- * so the whole-card click target and the per-platform actions don't fight each other.
+ * One video in the grid. The preview and body open the detail view; the footer does not, so its
+ * actions never fight the whole-card click target.
+ *
+ * The footer offers one action — whatever this video needs next — plus Google Drive and a menu for
+ * the rest. It used to hold two rows of eight small buttons, most of them disabled at any moment.
  */
 export function VideoCard({
-  m, index, onDelete,
-}: { m: Manifest; index: number; onDelete?: (m: Manifest) => void }) {
+  m, index, onDelete, onMoveToDrive,
+}: {
+  m: Manifest; index: number;
+  onDelete?: (m: Manifest) => void;
+  onMoveToDrive?: (m: Manifest) => void;
+}) {
   const select = useUi((s) => s.select);
   const jobId = useUi((s) => s.jobs[m.runId]) ?? null;
   const running = !!jobId;
   const stage = useRunStage(m.runId);
   const cancel = useCancelJob();
+  const drive = useDriveTransfer(m.runId);
+  const reveal = useRevealVideo();
+  const { data: settings } = useSettings();
   // Only polls when this card actually has a job (enabled: !!jobId), so a grid of 17 cards
   // isn't 17 pollers — it's however many are working.
   const job = useJob(jobId, m.runId);
@@ -47,37 +57,43 @@ export function VideoCard({
   const done = stagesDone(m);
   const st = m.stages;
   const complete = st.video.done;
+  // Moved to Google Drive: only the manifest and thumbnail are on this PC, so nothing that needs
+  // the files is offered until it's brought back.
+  const archived = !!m.archive;
+  const published = st.upload.done || st.facebook.done || st.instagram.done;
   // The topic as typed is the title. Older runs still carry a generated publish.title, which is
   // only a fallback for the rare run created without a topic.
   const title = m.topic || m.publish.title;
+  const openDetail = () => select(m.runId);
 
-  // Publishing posts publicly, so it stays behind the video checkpoint — same gate the detail
-  // view uses.
+  // Publishing posts publicly, so it stays behind the video checkpoint — same gate the detail view uses.
   const canPublish = st.video.done && m.review.videoApproved && !running;
   const gateReason = !st.video.done
     ? "Assemble the video first"
-    : !m.review.videoApproved
-      ? "Approve the video first"
-      : running
-        ? "A job is already running"
-        : "";
-
-  const run = (s: StageName) => { if (canPublish) stage.mutate({ stage: s }); };
-
-  // Re-running a finished stage. Deliberately NOT behind canPublish — redoing the voice or the
-  // cut is what you do to a video that isn't approved yet, so gating it on approval would lock
-  // out the exact case it exists for.
+    : !m.review.videoApproved ? "Approve the video first" : "";
+  const publish = (s: StageName) => { if (canPublish) stage.mutate({ stage: s }); };
+  // Re-running a finished stage. Deliberately NOT behind canPublish — redoing the voice or the cut
+  // is what you do to a video that isn't approved yet.
   const regen = (s: StageName, music?: boolean) => { if (!running) stage.mutate({ stage: s, music }); };
-
-  // Both are strictly *re*-generate: the first run of each stage happens in the detail view,
-  // which can check frames-against-beats properly. st.images.done alone can't be trusted for
-  // that — the stage marks itself done on a partial set.
-  const canRedoVoice = st.voice.done && !running;
-  const canRedoVideo = st.video.done && !running;
   // Runs assembled before the music choice was recorded fall back to whether tracks came out.
   const musicOn = st.video.music ?? (st.video.musicTracks?.length ?? 0) > 0;
+  // Either way of reaching Drive will do: an rclone remote, or the Drive app's folder.
+  const driveReady = !!(settings?.rcloneRemote || settings?.driveArchiveFolder);
 
-  const openDetail = () => select(m.runId);
+  // The one thing this video needs next.
+  const next: { label: string; icon: ReactNode; title: string; primary?: boolean; onClick: () => void } =
+    archived ? { label: "Bring back", icon: <CloudDownload />, title: "Copy the files back from Google Drive", onClick: () => drive.mutate("restore") }
+    : !complete ? { label: "Continue", icon: <ChevronRight />, title: "Open the video to run its next stage", onClick: openDetail }
+    : !m.review.videoApproved ? { label: "Review", icon: <ChevronRight />, title: "Watch the video and approve it", onClick: openDetail }
+    : !published ? { label: "Publish all", icon: <Rocket />, title: "Publish to every configured target", primary: true, onClick: () => publish("publish-all") }
+    : { label: "Open", icon: <ChevronRight />, title: "Open the video", onClick: openDetail };
+
+  const facts = [
+    m.channel,
+    st.voice.seconds ? duration(st.voice.seconds) : null,
+    st.images.count ? `${st.images.count} frames` : null,
+    relative(m.createdUtc),
+  ].filter(Boolean).join(" · ");
 
   return (
     <Card
@@ -85,11 +101,8 @@ export function VideoCard({
       className="stagger group flex flex-col overflow-hidden"
       style={{ "--i": index } as React.CSSProperties}
     >
-      {/* ── Thumbnail / preview (opens detail) ──────────────────────────── */}
-      <div
-        className="relative aspect-video cursor-pointer overflow-hidden bg-black/40"
-        onClick={openDetail}
-      >
+      {/* ── Preview (opens detail) ──────────────────────────────────────── */}
+      <div className="relative aspect-video cursor-pointer overflow-hidden bg-black/40" onClick={openDetail}>
         {m.publish.hasThumbnail ? (
           <img
             loading="lazy"
@@ -103,25 +116,18 @@ export function VideoCard({
           </div>
         )}
 
-        <div className="absolute left-2 top-2 flex gap-1.5">
-          <Badge tone="channel" className="backdrop-blur-sm">{m.channel}</Badge>
-        </div>
-
-        <div className="absolute right-2 top-2 flex items-center gap-1.5">
-          {onDelete && !running && (
-            <button
-              title="Delete this video"
-              onClick={(e) => { e.stopPropagation(); onDelete(m); }}
-              className="grid size-6 place-items-center rounded-md bg-black/50 text-white/50 opacity-0 backdrop-blur-sm transition-all hover:bg-red-500/25 hover:text-red-300 focus-visible:opacity-100 group-hover:opacity-100"
-            >
-              <Trash2 className="size-3" />
-            </button>
-          )}
+        {/* Only the status sits on the picture, and at the bottom: thumbnails put their title across
+            the top, and badges up there covered it. The channel is in the line under the title. */}
+        <div className="absolute bottom-2 right-2">
           {running
             ? <Badge tone="run" className="backdrop-blur-sm"><Spinner className="size-2.5" /> running</Badge>
-            : complete
-              ? <Badge tone="ok" className="backdrop-blur-sm"><CheckCircle2 className="size-2.5" /> ready</Badge>
-              : <Badge tone="muted" className="backdrop-blur-sm">{done}/5</Badge>}
+            : archived
+              ? <Badge tone="info" className="backdrop-blur-sm"><Cloud className="size-2.5" /> In Drive</Badge>
+              : published
+                ? <Badge tone="ok" className="backdrop-blur-sm"><CheckCircle2 className="size-2.5" /> published</Badge>
+                : complete
+                  ? <Badge tone="ok" className="backdrop-blur-sm"><CheckCircle2 className="size-2.5" /> ready</Badge>
+                  : <Badge tone="muted" className="backdrop-blur-sm">{done}/5</Badge>}
         </div>
 
         <div className="absolute inset-x-0 bottom-0">
@@ -129,93 +135,26 @@ export function VideoCard({
         </div>
       </div>
 
-      {/* ── Body (opens detail) ─────────────────────────────────────────── */}
-      <div className="flex flex-1 cursor-pointer flex-col gap-2.5 p-3.5" onClick={openDetail}>
-        <div className="min-w-0 flex-1">
-          {/* The second line used to carry the topic when a generated title displaced it. The
-              title IS the topic now, so it would just print the same text twice. */}
-          <h3 className="clamp-2 text-[13px] font-semibold leading-snug text-white/90">{title}</h3>
-        </div>
-
-        <div className="flex items-center gap-1">
-          {STAGE_ICONS.map(({ key, label, Icon }) => {
-            const ok = st[key].done;
-            return (
-              <span
-                key={key}
-                title={`${label}: ${ok ? "done" : "pending"}`}
-                className={cn(
-                  "grid size-6 place-items-center rounded-md transition-colors",
-                  ok ? "bg-emerald-500/12 text-emerald-400" : "bg-white/[0.04] text-white/20",
-                )}
-              >
-                <Icon className="size-3" />
-              </span>
-            );
-          })}
-          <span className="ml-auto text-[10px] tabular-nums text-white/25">
-            {relative(m.createdUtc)}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-3 border-t border-white/[0.05] pt-2 text-[10px] text-white/30">
-          {st.images.count ? (
-            <span className="flex items-center gap-1"><ImageIcon className="size-2.5" /> {st.images.count}</span>
-          ) : null}
-          {st.voice.seconds ? (
-            <span className="flex items-center gap-1"><Volume2 className="size-2.5" /> {Math.round(st.voice.seconds)}s</span>
-          ) : null}
+      {/* ── Title and one line of facts (opens detail) ──────────────────── */}
+      <div className="flex flex-1 cursor-pointer flex-col gap-1.5 px-3.5 pb-3 pt-3" onClick={openDetail}>
+        {/* The second line used to carry the topic when a generated title displaced it. The title
+            IS the topic now, so it would just print the same text twice. */}
+        <h3 className="clamp-2 text-[13px] font-semibold leading-snug text-white/90">{title}</h3>
+        <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] tabular-nums text-white/35">
+          <span>{facts}</span>
           {m.publish.scheduledUtc && (
             <span className="flex items-center gap-1 text-sky-300/70">
-              <CalendarDays className="size-2.5" />
+              <CalendarDays className="size-3" />
               {new Date(m.publish.scheduledUtc).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
             </span>
           )}
         </div>
       </div>
 
-      {/* ── Redo row (does NOT open detail) ─────────────────────────────── */}
-      {!running && (canRedoVoice || canRedoVideo) && (
-        <div className="flex items-center gap-1 border-t border-white/[0.06] bg-white/[0.015] px-1.5 py-1.5">
-          <span className="shrink-0 pl-1 pr-0.5 text-[9px] font-semibold uppercase tracking-wider text-white/25">
-            Redo
-          </span>
-          <RedoButton
-            label="Voice" icon={<Volume2 className="size-3" />}
-            disabled={!canRedoVoice}
-            tip={canRedoVoice
-              ? "Generate the voiceover again — picks up a changed voice or model"
-              : "Generate the voiceover first"}
-            onClick={() => regen("voice")}
-          />
-          <RedoButton
-            label="Video" icon={<Film className="size-3" />}
-            disabled={!canRedoVideo}
-            tip={canRedoVideo
-              ? `Re-assemble the mp4${musicOn ? "" : " (still without music)"}`
-              : "Assemble the video first"}
-            onClick={() => regen("video")}
-          />
-          <RedoButton
-            label={musicOn ? "No music" : "Music"}
-            icon={musicOn ? <VolumeX className="size-3" /> : <Music className="size-3" />}
-            active={!musicOn}
-            disabled={!canRedoVideo}
-            tip={!canRedoVideo
-              ? "Assemble the video first"
-              : musicOn
-                ? "Re-assemble voice-only, and drop the music credit from the description"
-                : "Re-assemble with background music, and put its credit back in the description"}
-            onClick={() => regen("video", !musicOn)}
-          />
-        </div>
-      )}
-
-      {/* ── Publish row / running row (does NOT open detail) ────────────── */}
+      {/* ── Footer (does NOT open detail) ───────────────────────────────── */}
       {running ? (
-        // While a job runs, the four actions are useless (all disabled) — so the row becomes the
-        // way to stop it. Previously the only Stop lived in the detail view's log overlay, which
-        // meant a job started from the grid couldn't be cancelled from the grid.
+        // While a job runs, every action would be refused anyway, so the footer becomes the way to
+        // stop it — a job started from the grid can be cancelled from the grid.
         <div className="flex items-center gap-2 border-t border-amber-500/25 bg-amber-500/[0.06] px-2 py-1.5">
           <Spinner className="size-3 shrink-0 text-amber-400" />
           <span className="min-w-0 flex-1 truncate text-[10px] font-medium text-amber-400">
@@ -232,34 +171,97 @@ export function VideoCard({
           </Button>
         </div>
       ) : (
-        <div
-          className="grid grid-cols-4 gap-1 border-t border-white/[0.06] bg-white/[0.015] p-1.5"
-          title={gateReason}
-        >
-          <PublishButton
-            label="All" icon={<Rocket className="size-3" />} primary
-            disabled={!canPublish}
-            onClick={() => run("publish-all")}
-            tip={gateReason || "Publish to every configured target"}
-          />
-          <PublishButton
-            label="YT" icon={<MonitorPlay className="size-3" />}
-            status={st.upload} disabled={!canPublish}
-            onClick={() => run("upload")}
-            tip={gateReason || statusTip("YouTube", st.upload)}
-          />
-          <PublishButton
-            label="FB" icon={<ThumbsUp className="size-3" />}
-            status={st.facebook} disabled={!canPublish}
-            onClick={() => run("facebook")}
-            tip={gateReason || statusTip("Facebook", st.facebook)}
-          />
-          <PublishButton
-            label="IG" icon={<Camera className="size-3" />}
-            status={st.instagram} disabled={!canPublish}
-            onClick={() => run("instagram")}
-            tip={gateReason || statusTip("Instagram", st.instagram)}
-          />
+        <div className="flex items-center gap-1 border-t border-white/[0.06] p-2">
+          <Button
+            size="sm"
+            variant={next.primary ? "primary" : "secondary"}
+            className="flex-1 [&_svg]:size-3.5"
+            title={next.title}
+            loading={archived && drive.isPending}
+            onClick={next.onClick}
+          >
+            {next.icon}
+            {next.label}
+          </Button>
+
+          {archived ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              title="Open its folder in Google Drive"
+              onClick={() => reveal.mutate(m.runId)}
+            >
+              <FolderOpen className="size-3.5" /> Open
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={!driveReady || !onMoveToDrive}
+              title={driveReady
+                ? "Move this video's files to Google Drive"
+                : "Set up Google Drive in Settings → Storage first"}
+              onClick={() => onMoveToDrive?.(m)}
+            >
+              <CloudUpload className="size-3.5" /> Drive
+            </Button>
+          )}
+
+          <Menu>
+            {!archived && (
+              <>
+                <MenuLabel>Redo</MenuLabel>
+                <MenuItem
+                  icon={<Volume2 />}
+                  disabled={!st.voice.done}
+                  title={st.voice.done ? "Generate the voiceover again — picks up a changed voice or model" : "Generate the voiceover first"}
+                  onSelect={() => regen("voice")}
+                >
+                  Voiceover
+                </MenuItem>
+                <MenuItem
+                  icon={<Film />}
+                  disabled={!complete}
+                  title={complete ? "Re-assemble the mp4 with the current frames and voice" : "Assemble the video first"}
+                  onSelect={() => regen("video")}
+                >
+                  Re-assemble video{musicOn ? "" : " (no music)"}
+                </MenuItem>
+                <MenuItem
+                  icon={musicOn ? <VolumeX /> : <Music />}
+                  disabled={!complete}
+                  title={musicOn
+                    ? "Re-assemble voice-only, and drop the music credit from the description"
+                    : "Re-assemble with background music, and put its credit back in the description"}
+                  onSelect={() => regen("video", !musicOn)}
+                >
+                  {musicOn ? "Re-assemble without music" : "Re-assemble with music"}
+                </MenuItem>
+
+                <MenuDivider />
+                <MenuLabel>Publish</MenuLabel>
+                <MenuItem icon={<MonitorPlay />} disabled={!canPublish} title={gateReason || statusTip("YouTube", st.upload)} onSelect={() => publish("upload")}>
+                  YouTube{st.upload.done ? " ✓" : ""}
+                </MenuItem>
+                <MenuItem icon={<ThumbsUp />} disabled={!canPublish} title={gateReason || statusTip("Facebook", st.facebook)} onSelect={() => publish("facebook")}>
+                  Facebook{st.facebook.done ? " ✓" : ""}
+                </MenuItem>
+                <MenuItem icon={<Camera />} disabled={!canPublish} title={gateReason || statusTip("Instagram", st.instagram)} onSelect={() => publish("instagram")}>
+                  Instagram{st.instagram.done ? " ✓" : ""}
+                </MenuItem>
+                <MenuDivider />
+              </>
+            )}
+            <MenuItem
+              icon={<Trash2 />}
+              danger
+              disabled={!onDelete}
+              title={archived ? "Removes it from this list. The copy in Google Drive stays." : "Delete this video and all its files"}
+              onSelect={() => onDelete?.(m)}
+            >
+              {archived ? "Remove from list" : "Delete video"}
+            </MenuItem>
+          </Menu>
         </div>
       )}
     </Card>
@@ -271,67 +273,4 @@ function statusTip(platform: string, s: StageStatus) {
   if (s.done) return `${platform}: published`;
   if (s.skipReason) return `${platform} skipped — ${s.skipReason}`;
   return `Publish to ${platform}`;
-}
-
-/**
- * One re-run action. Flatter than {@link PublishButton}: these repeat work that's already done
- * rather than sending anything outward, so there's no published/skipped state to carry. `active`
- * marks the one that describes a change from how the video stands now.
- */
-function RedoButton({
-  label, icon, disabled, onClick, tip, active,
-}: {
-  label: string; icon: ReactNode; disabled?: boolean;
-  onClick: () => void; tip: string; active?: boolean;
-}) {
-  return (
-    <button
-      title={tip}
-      disabled={disabled}
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-      className={cn(
-        "flex flex-1 items-center justify-center gap-1 rounded-md px-1 py-1 text-[10px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-35",
-        active
-          ? "bg-amber-500/[0.08] text-amber-400/80 hover:bg-amber-500/15"
-          : "text-white/45 hover:bg-white/[0.07] hover:text-white/80",
-      )}
-    >
-      {icon}
-      {label}
-    </button>
-  );
-}
-
-function PublishButton({
-  label, icon, status, disabled, onClick, tip, primary,
-}: {
-  label: string; icon: ReactNode; status?: StageStatus;
-  disabled?: boolean; onClick: () => void; tip: string; primary?: boolean;
-}) {
-  const published = status?.done;
-  const skipped = !published && !!status?.skipReason;
-
-  return (
-    <button
-      title={tip}
-      disabled={disabled}
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-      className={cn(
-        "relative flex items-center justify-center gap-1 rounded-md px-1 py-1.5 text-[10px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-35",
-        primary
-          ? "bg-amber-500/15 text-amber-400 hover:bg-amber-500/25"
-          : published
-            ? "bg-emerald-500/12 text-emerald-400 hover:bg-emerald-500/20"
-            : skipped
-              ? "bg-amber-500/[0.08] text-amber-400/70 hover:bg-amber-500/15"
-              : "text-white/45 hover:bg-white/[0.07] hover:text-white/80",
-      )}
-    >
-      {icon}
-      {label}
-      {published && (
-        <span className="absolute right-1 top-1 size-1 rounded-full bg-emerald-400" />
-      )}
-    </button>
-  );
 }

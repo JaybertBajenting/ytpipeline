@@ -84,6 +84,8 @@ public static class PipelineServiceRegistration
         services.AddSingleton<PhoneticNarrationCleaner>();
         // Not a stage — writes a channel's About text on demand from the Channels screen.
         services.AddSingleton<ChannelIdentityWriter>();
+        // Checks the citations in a description against Crossref / Open Library.
+        services.AddSingleton<SourceVerifier>();
         services.AddSingleton<MusicSelector>();
         // Both image backends are registered; the router picks per call from Settings.
         services.AddSingleton<CodexCliImageGenerator>();

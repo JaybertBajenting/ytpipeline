@@ -20,9 +20,14 @@ public static class Mp3Duration
         { 11025, 12000,  8000, 0 }, // MPEG2.5
     };
 
-    public static double GetSeconds(string path)
+    public static double GetSeconds(string path) => GetSeconds(File.ReadAllBytes(path));
+
+    /// <summary>
+    /// Same measurement on bytes already in memory — used to time each chunk of a long narration
+    /// before the chunks are concatenated, without writing every part to disk first.
+    /// </summary>
+    public static double GetSeconds(byte[] bytes)
     {
-        var bytes = File.ReadAllBytes(path);
         int i = SkipId3v2(bytes);
         double total = 0;
 

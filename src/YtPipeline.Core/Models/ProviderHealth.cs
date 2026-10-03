@@ -23,4 +23,10 @@ public sealed class ProviderQuotaState
 
     /// <summary>How many times in a row a retry has found it still exhausted.</summary>
     public int ConsecutiveProbeFailures { get; set; }
+
+    /// <summary>
+    /// When the provider itself said the limit resets, if it said so. Codex does ("resets_at");
+    /// Google Flow doesn't, so gflow keeps the cooldown guess. Null = use the cooldown.
+    /// </summary>
+    public DateTime? ResetsUtc { get; set; }
 }

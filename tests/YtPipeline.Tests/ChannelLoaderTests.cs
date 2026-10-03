@@ -37,6 +37,20 @@ public sealed class ChannelLoaderTests : IDisposable
         channel.VideoLengthMaxMinutes.Should().Be(5);
     }
 
+    [Theory]
+    [InlineData("gflow", "gflow")]
+    [InlineData(" Codex ", "codex")]
+    [InlineData("midjourney", "")]
+    [InlineData("", "")]
+    public void Save_keeps_a_known_image_generator_and_clears_anything_else(string saved, string expected)
+    {
+        var loader = new ChannelLoader(_dir);
+        var channel = loader.Load("nullpointer");
+        channel.ImageProvider = saved;
+        loader.Save("nullpointer", channel).ImageProvider.Should().Be(expected);
+        new ChannelLoader(_dir).Load("nullpointer").ImageProvider.Should().Be(expected);
+    }
+
     [Fact]
     public void Save_keeps_the_range_and_resyncs_the_legacy_field()
     {

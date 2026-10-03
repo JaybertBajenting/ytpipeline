@@ -28,6 +28,30 @@ public sealed class ProviderHealthStoreTests : IDisposable
     }
 
     [Fact]
+    public void A_stated_reset_benches_until_exactly_then_and_success_clears_it()
+    {
+        // Codex's 429 names its reset (2026-09-30: 18 hours out). Retrying after the 60-minute
+        // cooldown would just hit the same wall, so the stated time wins.
+        var store = New();
+        var resets = DateTime.UtcNow.AddHours(18);
+        store.MarkExhausted("codex", "usage_limit_reached", Base, resets).Should().BeTrue();
+        store.BenchedUntil("codex", Base).Should().Be(resets);
+        New().BenchedUntil("codex", Base).Should().Be(resets, "it is persisted");
+
+        store.MarkHealthy("codex");
+        store.BenchedUntil("codex", Base).Should().BeNull();
+        store.Snapshot("codex").ResetsUtc.Should().BeNull();
+    }
+
+    [Fact]
+    public void A_stated_reset_in_the_past_does_not_bench()
+    {
+        var store = New();
+        store.MarkExhausted("codex", "usage_limit_reached", Base, DateTime.UtcNow.AddMinutes(-1));
+        store.BenchedUntil("codex", Base).Should().BeNull();
+    }
+
+    [Fact]
     public void First_report_benches_the_provider()
     {
         var store = New();

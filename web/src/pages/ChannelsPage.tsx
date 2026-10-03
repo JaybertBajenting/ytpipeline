@@ -9,8 +9,9 @@ import {
 } from "@/lib/api";
 import {
   useBrandImage, useChannelPublish, useChannels, useCreateChannel, useDeleteChannel,
-  useGenerateIdentity, useRuns, useSaveChannel, useSaveChannelPublish, type BrandKind,
+  useGenerateIdentity, useRuns, useSaveChannel, useSaveChannelPublish, useSettings, type BrandKind,
 } from "@/lib/hooks";
+import { settingsVoiceModel, voiceModelLabel, voiceModelOptions } from "@/lib/voiceModels";
 import {
   Badge, Button, Callout, Card, CardHead, ConfirmModal, EmptyState, Field, Input, Modal,
   PageHead, SectionLabel, SecretInput, Select, Skeleton, Slider, Spinner, Switch, Textarea, Toast,
@@ -357,6 +358,7 @@ function ChannelEditor({ channel, onBack }: { channel: Channel; onBack: () => vo
     setPub((p) => (p ? { ...p, ...patch } : p));
 
   const overriding = draft.voice.stability !== null || draft.voice.similarityBoost !== null;
+  const { data: settings } = useSettings();
   const budget = lengthBudget(draft.videoLengthMinMinutes, draft.videoLengthMaxMinutes);
 
   /** Keeps the pair ordered: dragging one handle past the other pushes the other along. */
@@ -496,30 +498,19 @@ function ChannelEditor({ channel, onBack }: { channel: Channel; onBack: () => vo
               onChange={(e) => setVoice({ voiceName: e.target.value })}
               hint="Shown around the UI, since the ID alone is unreadable."
             />
+            {/* Every model offered here returns word timing, which the video stage uses to put each
+                picture on the word it's spoken over (v3 and v2 on real runs, v4 tested 2026-09-29). */}
             <Select
               label="Model"
               value={draft.voice.modelId}
               onChange={(e) => setVoice({ modelId: e.target.value })}
-              hint="Pick the model the voice was designed with. v3 is the most expressive; v2 is the safest for A/V sync — see the note below."
+              hint="Usually the model the voice was designed with. A single video can try another from its Voiceover step without changing this."
             >
-              <option value="">Inherit global</option>
-              <option value="eleven_v3">eleven_v3 — most expressive (5,000 char limit)</option>
-              <option value="eleven_multilingual_v2">eleven_multilingual_v2 — 10,000 char limit</option>
-              <option value="eleven_turbo_v2_5">eleven_turbo_v2_5 — faster</option>
-              <option value="eleven_flash_v2_5">eleven_flash_v2_5 — fastest, 40,000 char limit</option>
+              <option value="">Settings default — {voiceModelLabel(settingsVoiceModel(settings))}</option>
+              {voiceModelOptions(draft.voice.modelId).map((m) => (
+                <option key={m.id} value={m.id}>{m.label} — {m.note}</option>
+              ))}
             </Select>
-
-            {draft.voice.modelId === "eleven_v3" && (
-              <Callout tone="warn" title="v3 and image timing">
-                The voice stage asks for per-character timestamps and uses them to sync each image
-                to the exact word it's spoken over. ElevenLabs doesn't document whether
-                <code> eleven_v3</code> returns alignment on the <code>with-timestamps</code>
-                endpoint. If it doesn't, the run still completes — the video stage falls back to
-                splitting each beat by word count, so cuts land close but not exactly on the
-                narration. Check the voice stage log for
-                "returned no alignment" after your first v3 run.
-              </Callout>
-            )}
             <Switch
               checked={overriding}
               onChange={(on) => setVoice(on
@@ -556,8 +547,24 @@ function ChannelEditor({ channel, onBack }: { channel: Channel; onBack: () => vo
 
         {/* ── Look ──────────────────────────────────────────────────────── */}
         <Card>
-          <CardHead title="Look" desc="Used when no <id>.image.md rule file exists." icon={<ImageIcon className="size-3.5" />} />
+          <CardHead title="Look" desc="Who draws this channel, and the style used when no <id>.image.md rule file exists." icon={<ImageIcon className="size-3.5" />} />
           <div className="space-y-3.5 p-4">
+            <Select
+              label="Image generator"
+              value={draft.imageProvider ?? ""}
+              onChange={(e) => set("imageProvider", e.target.value as Channel["imageProvider"])}
+              hint="gflow and Codex don't draw alike, so keep a channel on the one that drew its first videos. A channel set to one of them never switches to the other, even when it runs out."
+            >
+              <option value="">Settings default — {settings?.imageProvider === "gflow" ? "gflow" : "Codex"}</option>
+              <option value="gflow">gflow — Google Flow</option>
+              <option value="codex">Codex</option>
+            </Select>
+            {draft.referenceStudy?.imagePaths?.length ? (
+              <Callout tone="info" title="Draws from reference images">
+                Every frame and thumbnail is sent this channel's own reference images from{" "}
+                <code>{draft.referenceStudy.sourceUrl}</code>. Channels without them get the rule text only.
+              </Callout>
+            ) : null}
             <Textarea
               label="Visual style" rows={4}
               value={draft.visualStyle}
@@ -745,6 +752,12 @@ function ChannelEditor({ channel, onBack }: { channel: Channel; onBack: () => vo
                 })}
               />
             </Field>
+            <Textarea
+              label="Description format" rows={6}
+              value={draft.descriptionFormat ?? ""}
+              onChange={(e) => set("descriptionFormat", e.target.value)}
+              hint="House format for the description, sent to the script writer. Leave empty for a few plain sentences. If you ask for citations here, also tell it never to invent a DOI."
+            />
             <Textarea
               label="Description footer" rows={3}
               value={draft.youtube.descriptionFooter}
@@ -964,7 +977,7 @@ function BrandArt({
     <div>
       <div className="mb-2 flex items-center gap-2">
         <SectionLabel>{isAvatar ? "Profile picture" : "Cover photo"}</SectionLabel>
-        <span className="text-[10px] text-white/25">{isAvatar ? "800×800" : "2048×1152"}</span>
+        <span className="text-[10px] text-white/25">{isAvatar ? "800×800" : "2560×1440"}</span>
       </div>
 
       <div className={cn(
@@ -979,9 +992,12 @@ function BrandArt({
           </div>
         )}
 
-        {/* YouTube shows only the middle of the banner's width on a phone. */}
+        {/* YouTube keeps a 1546×423 box out of the 2560×1440 upload: 60.4% of the width but only
+            29.4% of the height. Marking the width alone implied the full height survived, so a
+            banner composed as an ordinary 16:9 picture looked fine here and lost its subject's
+            head and feet on a phone. The dimmed surround is the part that gets cropped away. */}
         {!isAvatar && exists && (
-          <div className="pointer-events-none absolute inset-y-0 left-1/2 w-[60%] -translate-x-1/2 border-x border-dashed border-amber-400/40" />
+          <div className="pointer-events-none absolute left-1/2 top-1/2 h-[29.4%] w-[60.4%] -translate-x-1/2 -translate-y-1/2 border border-dashed border-amber-400/50 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]" />
         )}
         {mine && exists && (
           <div className="absolute inset-0 grid place-items-center bg-black/60"><Spinner /></div>
@@ -990,7 +1006,8 @@ function BrandArt({
 
       {!isAvatar && (
         <p className="mt-1.5 text-[10px] leading-relaxed text-white/25">
-          Dashed lines mark what stays visible on a phone — keep the subject between them.
+          The dashed box is the 1546×423 area every viewer sees. Everything dimmed around it is
+          cropped away on a phone — keep the subject and any lettering inside the box.
         </p>
       )}
 

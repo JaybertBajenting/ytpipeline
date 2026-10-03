@@ -57,6 +57,33 @@ export function useScheduleRun() {
   });
 }
 
+/**
+ * Moves a video's files into Google Drive, or brings them back. Both run as jobs, so the card and the
+ * detail view show progress and a Stop button exactly as they do for a stage.
+ */
+export function useDriveTransfer(runId: string) {
+  const setJob = useUi((s) => s.setJob);
+  return useMutation({
+    mutationFn: (direction: "move" | "restore") =>
+      direction === "move" ? api.moveToDrive(runId) : api.bringBackFromDrive(runId),
+    onSuccess: ({ jobId }) => setJob(runId, jobId),
+  });
+}
+
+/** Opens Explorer on this PC with the run's final.mp4 selected. */
+export function useRevealVideo() {
+  return useMutation({ mutationFn: (runId: string) => api.revealVideo(runId) });
+}
+
+export function useDeleteImage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ runId, name }: { runId: string; name: string }) => api.deleteImage(runId, name),
+    // The detail query owns the frame list, so refetching it is what removes the tile.
+    onSuccess: (_res, { runId }) => qc.invalidateQueries({ queryKey: ["run", runId] }),
+  });
+}
+
 export function useDeleteRun() {
   const qc = useQueryClient();
   const select = useUi((s) => s.select);
@@ -216,9 +243,9 @@ export function useGenerateScript() {
 export function useRunStage(runId: string) {
   const setJob = useUi((s) => s.setJob);
   return useMutation({
-    mutationFn: ({ stage, privacy, force, music }:
-      { stage: any; privacy?: string; force?: boolean; music?: boolean }) =>
-      api.runStage(runId, stage, privacy, force, music),
+    mutationFn: ({ stage, privacy, force, music, provider, model }:
+      { stage: any; privacy?: string; force?: boolean; music?: boolean; provider?: any; model?: string }) =>
+      api.runStage(runId, stage, privacy, force, music, provider, model),
     onSuccess: ({ jobId }) => setJob(runId, jobId),
   });
 }

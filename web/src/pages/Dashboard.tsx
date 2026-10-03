@@ -69,7 +69,12 @@ export function Dashboard() {
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-white/80">Recent</h2>
             {all.length > 4 && (
-              <Button size="sm" variant="ghost" onClick={() => go("videos")}>
+              // "View all" has to mean all now that the Videos filters are remembered between visits.
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => { useUi.getState().clearVideoFilters(); go("videos"); }}
+              >
                 View all <ArrowRight className="size-3" />
               </Button>
             )}

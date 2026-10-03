@@ -47,7 +47,14 @@ export function DeleteVideoDialog({
         <KeyValue k="On disk" v={size !== undefined ? formatBytes(size) : "…"} />
       </div>
 
-      {frames > 0 && (
+      {target.archive && (
+        <Callout tone="info">
+          This video's files are in Google Drive. Only its entry on this PC is removed — the copy in
+          Google Drive stays where it is.
+        </Callout>
+      )}
+
+      {frames > 0 && !target.archive && (
         <Callout tone="warn" title="Frames cost quota to regenerate">
           Deleting removes {frames} generated image{frames === 1 ? "" : "s"}. Re-creating them
           means spending image credits again — there's no undo and no recycle bin.

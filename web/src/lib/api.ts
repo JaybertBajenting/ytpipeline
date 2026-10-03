@@ -44,6 +44,8 @@ export interface ChannelIdentity {
   /** Optional extra art direction, layered on the channel's image rule. */
   avatarPrompt: string;
   bannerPrompt: string;
+  /** Wording to letter across the banner; empty draws it wordless. Edited in the channel json. */
+  bannerHeadline: string;
 }
 
 export interface Channel {
@@ -58,7 +60,17 @@ export interface Channel {
   videoLengthMinMinutes: number;
   videoLengthMaxMinutes: number;
   scriptStructure: string[];
+  /** House format for the YouTube description. Empty = a few plain sentences, as before. */
+  descriptionFormat: string;
+  /** Seconds each image holds. 0 = the default ~2s fast cut. Sets beat length, so it sets image count. */
+  secondsPerImage: number;
   visualStyle: string;
+  /** Backend that draws this channel. "" follows Settings; a named one never falls back to the other. */
+  imageProvider: ImageProvider | "";
+  /** Real source images/transcripts studied on every generation. Not edited here, but must round-trip. */
+  referenceStudy?: {
+    sourceUrl: string; transcriptPaths: string[]; imagePaths: string[]; thumbnailPaths: string[];
+  } | null;
   voiceNotes: string;
   voice: ChannelVoice;
   music: boolean;
@@ -88,6 +100,13 @@ export interface StageStatus {
    * Undefined means "follow the channel setting" — it's only written once you pick.
    */
   music?: boolean;
+  /** Voice stage: the ElevenLabs model that voiced the mp3 on disk. */
+  model?: string;
+  /**
+   * Voice stage: a model picked for this video alone, kept for its next voiceover. Undefined means
+   * it follows the channel.
+   */
+  modelChoice?: string;
   /** Publish targets: platform post id, permalink, and why a publish did nothing. */
   postId?: string;
   url?: string;
@@ -120,6 +139,14 @@ export interface Manifest {
     /** Planned publish date. A plan only — nothing publishes on a timer. */
     scheduledUtc: string | null;
   };
+  /** Set once the files were moved to Google Drive; only the manifest and thumbnail stay on this PC. */
+  archive?: {
+    /** Where it shows in File Explorer via Google Drive for desktop; "" if that folder isn't set. */
+    location: string;
+    /** rclone remote path when uploaded with rclone; null when copied into the Drive folder. */
+    remote?: string | null;
+    movedUtc: string; files: number; bytes: number;
+  } | null;
 }
 
 export interface Beat { index: number; narration: string; imagePrompt: string }
@@ -160,7 +187,7 @@ export interface Job {
 }
 
 export type StageName =
-  | "script" | "voice" | "images" | "video" | "thumbnail"
+  | "script" | "voice" | "images" | "video" | "thumbnail" | "description"
   | "upload" | "facebook" | "instagram" | "publish-all";
 
 /** Publish destinations a card can trigger, in the order "Upload all" runs them. */
@@ -193,10 +220,20 @@ export interface AppSettings {
   imageFallbackProvider: ImageProvider | "";
   /** Backend for the publish thumbnail. Empty follows imageProvider. */
   thumbnailProvider: ImageProvider | "";
+  /** Codex coordinator settings for frames, thumbnails, and channel art. */
+  codexModel: "gpt-6.1-sol" | "gpt-6-astra" | "gpt-6-sol" | "gpt-6-luna" | "gpt-5.6-sol" | "gpt-5.6-terra" | "gpt-5.6-luna" | "gpt-5.5";
+  codexReasoningEffort: "low" | "medium" | "high" | "xhigh" | "max" | "ultra";
   gflow: GflowSettings;
+  /** ElevenLabs model for channels that don't pick one. "" = appsettings.json's (eleven_multilingual_v2). */
+  elevenLabsModel: string;
   voiceGain: number;
   musicEnabled: boolean;
   musicVolume: number;
+  /** Where Google Drive for desktop shows these files; also the move target when no rclone remote is set. */
+  driveArchiveFolder: string;
+  /** rclone destination, e.g. "gdrive:YtPipeline". Set = upload straight to Google, freeing space at once. */
+  rcloneRemote: string;
+  rcloneExecutable: string;
 }
 
 /** Whether a provider is currently benched for quota, and when it gets retried. */
@@ -213,7 +250,18 @@ export interface ProviderHealth {
 }
 
 export interface GflowCheck {
+  /** The CLI ran. Says nothing about whether it can generate — see `connected`. */
   installed: boolean;
+  /**
+   * The backend is up AND the browser extension is attached, i.e. generation will actually work.
+   * Separate from `installed` because `flow status` exits 0 while reporting a disconnected
+   * extension, so the exit code alone reported "reachable" through a run where every beat failed.
+   */
+  connected: boolean;
+  /** The probe's own `status:` line, e.g. "unauthorized_or_disconnected". */
+  state: string;
+  /** What to do about it, when the CLI ran but cannot generate. */
+  remedy: string | null;
   version: string | null;
   error: string | null;
 }
@@ -311,10 +359,18 @@ export const api = {
   generateScript: (channel: string, topic: string, auto: boolean) =>
     http.post<{ jobId: string; runId: string }>("/api/script", { channel, topic, auto }).then((r) => r.data),
 
-  runStage: (runId: string, stage: StageName, privacy?: string, force?: boolean, music?: boolean) => {
+  runStage: (
+    runId: string, stage: StageName, privacy?: string, force?: boolean, music?: boolean,
+    provider?: ImageProvider, model?: string,
+  ) => {
     const qs = new URLSearchParams();
     if (privacy) qs.set("privacy", privacy);
     if (force) qs.set("force", "true");
+    // Images only: pins the whole set to one backend. They don't draw alike, so a set finished on
+    // the other one is visible in the video.
+    if (provider) qs.set("provider", provider);
+    // Voice only: an ElevenLabs model id for this video, or "default" for the channel's.
+    if (model) qs.set("model", model);
     // Explicit false is meaningful here, so this tests for undefined rather than falsiness.
     if (music !== undefined) qs.set("music", String(music));
     const suffix = qs.toString() ? `?${qs}` : "";
@@ -357,8 +413,17 @@ export const api = {
     http.delete(`/api/channels/${channelId}/brand/${kind}`).then((r) => r.data),
 
   imageUrl: (runId: string, name: string) => `/api/runs/${runId}/image/${encodeURIComponent(name)}`,
+  deleteImage: (runId: string, name: string) =>
+    http.delete<{ deleted: string }>(`/api/runs/${runId}/image/${encodeURIComponent(name)}`)
+      .then((r) => r.data),
   audioUrl: (runId: string, bust?: string | null) =>
     `/api/runs/${runId}/audio${bust ? `?t=${encodeURIComponent(bust)}` : ""}`,
+  moveToDrive: (runId: string) =>
+    http.post<{ jobId: string }>(`/api/runs/${runId}/drive/move`).then((r) => r.data),
+  bringBackFromDrive: (runId: string) =>
+    http.post<{ jobId: string }>(`/api/runs/${runId}/drive/restore`).then((r) => r.data),
+  revealVideo: (runId: string) =>
+    http.post<{ opened: string }>(`/api/runs/${runId}/reveal`).then((r) => r.data),
   videoUrl: (runId: string, bust?: string | null) =>
     `/api/runs/${runId}/video${bust ? `?t=${encodeURIComponent(bust)}` : ""}`,
   thumbnailUrl: (runId: string, bust: string | number = 0) =>
@@ -410,7 +475,10 @@ export function formatBytes(bytes: number): string {
  * all, so the editor substitutes this rather than reading through undefined.
  */
 export function emptyIdentity(): ChannelIdentity {
-  return { handle: "", bio: "", byline: "", keywords: [], links: [], avatarPrompt: "", bannerPrompt: "" };
+  return {
+    handle: "", bio: "", byline: "", keywords: [], links: [],
+    avatarPrompt: "", bannerPrompt: "", bannerHeadline: "",
+  };
 }
 
 /** YouTube's own limit on the About text — surfaced so the field can warn before Studio rejects it. */
@@ -428,7 +496,10 @@ export function newChannelTemplate(name: string): Partial<Channel> {
     videoLengthMinMinutes: 3,
     videoLengthMaxMinutes: 5,
     scriptStructure: ["Cold open hook", "Plain-language answer", "Mechanism in 3-4 beats", "Recap + outro"],
+    descriptionFormat: "",
+    secondsPerImage: 0,
     visualStyle: "",
+    imageProvider: "",
     voiceNotes: "",
     voice: { voiceId: "", voiceName: "", modelId: "", stability: null, similarityBoost: null },
     music: true,

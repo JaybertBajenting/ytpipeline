@@ -17,8 +17,47 @@ public sealed class SettingsStoreTests : IDisposable
         var store = new SettingsStore(_dir);
 
         store.Current.ImageProvider.Should().Be(ImageProviders.Codex);
+        store.Current.CodexModel.Should().Be("gpt-6-astra");
+        store.Current.CodexReasoningEffort.Should().Be("low");
         store.Current.VoiceGain.Should().Be(1.25);
         store.Current.Gflow.Aspect.Should().Be("16:9");
+    }
+
+    [Fact]
+    public void Codex_model_and_effort_round_trip_and_invalid_values_reset()
+    {
+        var store = new SettingsStore(_dir);
+        store.Save(new AppSettings { CodexModel = "gpt-5.6-sol", CodexReasoningEffort = "high" });
+        var reloaded = new SettingsStore(_dir).Current;
+        reloaded.CodexModel.Should().Be("gpt-5.6-sol");
+        reloaded.CodexReasoningEffort.Should().Be("high");
+
+        store.Save(new AppSettings { CodexModel = "gpt-6-astra", CodexReasoningEffort = "ultra" });
+        new SettingsStore(_dir).Current.CodexReasoningEffort.Should().Be("ultra");
+
+        store.Save(new AppSettings { CodexModel = "invalid", CodexReasoningEffort = "invalid" });
+        reloaded = new SettingsStore(_dir).Current;
+        reloaded.CodexModel.Should().Be("gpt-6-astra");
+        reloaded.CodexReasoningEffort.Should().Be("low");
+    }
+
+    [Theory]
+    [InlineData("gpt-6.1-sol", "ultra", "ultra")]
+    [InlineData("gpt-6-astra", "ultra", "ultra")]
+    [InlineData("gpt-6-sol", "ultra", "ultra")]
+    [InlineData("gpt-6-luna", "ultra", "max")]
+    [InlineData("gpt-5.6-sol", "ultra", "ultra")]
+    [InlineData("gpt-5.6-terra", "ultra", "ultra")]
+    [InlineData("gpt-5.6-luna", "ultra", "max")]
+    [InlineData("gpt-5.5", "max", "xhigh")]
+    public void All_visible_Codex_models_save_with_a_compatible_effort(
+        string model, string requestedEffort, string expectedEffort)
+    {
+        var store = new SettingsStore(_dir);
+        store.Save(new AppSettings { CodexModel = model, CodexReasoningEffort = requestedEffort });
+        var reloaded = new SettingsStore(_dir).Current;
+        reloaded.CodexModel.Should().Be(model);
+        reloaded.CodexReasoningEffort.Should().Be(expectedEffort);
     }
 
     /// <summary>

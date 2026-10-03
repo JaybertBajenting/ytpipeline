@@ -130,6 +130,14 @@ at low volume with a fade-out. The chosen track names are saved to
 voice-only videos. Music never blocks a run — if selection fails or it's disabled, the video
 renders without it. `apply_music.py` re-runs this selection to retro-fit music onto an existing run.
 
+### Google Drive (Move to Google Drive)
+
+Set up in Settings → Storage. With an **rclone remote** set (`gdrive:YtPipeline`), a move uploads with
+rclone, checks every file, and only then frees the space here. Without one, it copies into the Google
+Drive for desktop folder instead. rclone's shared Google client ID is retired during 2026; when
+uploads start failing with sign-in errors, follow
+[docs/google-drive-own-client-id.md](docs/google-drive-own-client-id.md).
+
 ## Notes
 
 - **Per-beat timing** is anchored to the actual voiceover: the voice stage captures ElevenLabs

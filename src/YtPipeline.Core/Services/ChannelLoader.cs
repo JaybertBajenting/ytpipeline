@@ -146,6 +146,14 @@ public sealed class ChannelLoader
     {
         MigrateLength(c);
 
+        // Unknown values mean "follow Settings" rather than silently picking a backend.
+        c.ImageProvider = c.ImageProvider?.Trim().ToLowerInvariant() switch
+        {
+            ImageProviders.Gflow => ImageProviders.Gflow,
+            ImageProviders.Codex => ImageProviders.Codex,
+            _ => "",
+        };
+
         // 1-30 min: a 0 would ask for a zero-word script, and a huge value would queue
         // thousands of image generations.
         c.VideoLengthMinMinutes = Math.Clamp(c.VideoLengthMinMinutes, 1, 30);

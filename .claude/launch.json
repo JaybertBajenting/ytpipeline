@@ -4,8 +4,9 @@
     {
       "name": "ytpipeline-web",
       "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "set PORT=5099 && dotnet run --project src\\YtPipeline.Web"],
-      "port": 5099
+      "runtimeArgs": ["/c", "dotnet run --project src\\YtPipeline.Web"],
+      "port": 5099,
+      "autoPort": true
     }
   ]
 }

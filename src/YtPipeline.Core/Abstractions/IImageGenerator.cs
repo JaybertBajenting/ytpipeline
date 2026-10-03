@@ -10,8 +10,14 @@ public interface IImageGenerator
     /// When false (default), already-generated frames are kept and only the missing beats are
     /// produced — this is what makes the stage resumable after an interruption.
     /// </param>
+    /// <param name="forceProvider">
+    /// Backend to use for this call, overriding the configured preference. Null follows the
+    /// configuration. Only the router acts on it — a concrete generator IS one provider, so it
+    /// ignores the request.
+    /// </param>
     Task<IReadOnlyList<string>> GenerateAsync(
-        Run run, ScriptDocument script, Channel channel, CancellationToken ct, bool regenerate = false);
+        Run run, ScriptDocument script, Channel channel, CancellationToken ct,
+        bool regenerate = false, string? forceProvider = null);
 
     /// <summary>Generates a single YouTube thumbnail for the run. Returns its path.</summary>
     Task<string> GenerateThumbnailAsync(Run run, ScriptDocument script, Channel channel, CancellationToken ct);

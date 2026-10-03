@@ -20,6 +20,12 @@ public sealed class Manifest
     /// <summary>Ready-to-publish metadata produced after the video stage.</summary>
     public PublishInfo Publish { get; set; } = new();
 
+    /// <summary>
+    /// Set once the run's files have been moved off this PC (to Google Drive). Only this manifest and
+    /// the thumbnail stay behind, so the video keeps its place in the list. Null means the files are here.
+    /// </summary>
+    public ArchiveInfo? Archive { get; set; }
+
     public static Manifest FromRun(Run run) => new()
     {
         RunId = run.RunId,
@@ -86,6 +92,25 @@ public sealed class ReviewStatus
 {
     public bool ScriptApproved { get; set; }
     public bool VideoApproved { get; set; }
+}
+
+/// <summary>Where a run's files went when they were moved off this PC.</summary>
+public sealed class ArchiveInfo
+{
+    /// <summary>
+    /// Where the files show up in File Explorer, e.g. <c>G:\My Drive\YtPipeline\barely-an-expert\20260903_131915</c>.
+    /// Empty when uploaded with rclone and no Google Drive folder is set — the files are still in Drive.
+    /// </summary>
+    public string Location { get; set; } = "";
+
+    /// <summary>
+    /// The rclone remote path the files were uploaded to, e.g. <c>gdrive:YtPipeline/barely-an-expert/20260903_131915</c>.
+    /// Null for videos moved by copying into the Google Drive folder, which bring back the same way.
+    /// </summary>
+    public string? Remote { get; set; }
+    public DateTime MovedUtc { get; set; }
+    public int Files { get; set; }
+    public long Bytes { get; set; }
 }
 
 /// <summary>Title, description, tags and thumbnail to hand to YouTube.</summary>

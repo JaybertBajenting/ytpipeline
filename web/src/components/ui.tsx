@@ -1,10 +1,11 @@
 import { cva, type VariantProps } from "class-variance-authority";
-import { AlertTriangle, Check, ChevronDown, Copy, Info, Loader2, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Copy, Info, Loader2, MoreHorizontal, X } from "lucide-react";
 import {
-  createContext, useContext, useEffect, useId, useState,
+  createContext, useContext, useEffect, useId, useRef, useState,
   type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode,
   type SelectHTMLAttributes, type TextareaHTMLAttributes,
 } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
 // ─── Button ──────────────────────────────────────────────────────────────────
@@ -548,6 +549,118 @@ export function ConfirmModal({
       </div>
     </Modal>
   );
+}
+
+// ─── Menu ────────────────────────────────────────────────────────────────────
+
+/**
+ * A "⋯" dropdown for secondary actions. Rendered into <body>: video cards clip their overflow and
+ * animate with transforms, either of which would cut a normal dropdown off at the card's edge.
+ * Clicks inside never reach the card underneath, which opens its detail view on click.
+ */
+export function Menu({ label = "More actions", children }: { label?: string; children: ReactNode }) {
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!pos) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!panel.current?.contains(t) && !trigger.current?.contains(t)) setPos(null);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setPos(null); };
+    const dismiss = () => setPos(null);
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("resize", dismiss);
+    window.addEventListener("scroll", dismiss, true);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", dismiss);
+      window.removeEventListener("scroll", dismiss, true);
+    };
+  }, [pos]);
+
+  function toggle(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (pos) { setPos(null); return; }
+    const r = trigger.current!.getBoundingClientRect();
+    const right = window.innerWidth - r.right;
+    // Open upward when there isn't room below — the last row of the grid, for one.
+    setPos(r.bottom + 300 > window.innerHeight
+      ? { bottom: window.innerHeight - r.top + 4, right }
+      : { top: r.bottom + 4, right });
+  }
+
+  return (
+    <>
+      <button
+        ref={trigger}
+        type="button"
+        aria-label={label}
+        title={label}
+        aria-expanded={!!pos}
+        onClick={toggle}
+        className={cn(
+          "grid size-7 shrink-0 place-items-center rounded-md transition-colors",
+          pos ? "bg-white/[0.08] text-white/85" : "text-white/45 hover:bg-white/[0.07] hover:text-white/85",
+        )}
+      >
+        <MoreHorizontal className="size-4" />
+      </button>
+      {pos && createPortal(
+        <div
+          ref={panel}
+          role="menu"
+          style={pos}
+          className="scale-in fixed z-50 min-w-52 overflow-hidden rounded-lg border border-white/[0.1] bg-[#16161a] py-1 shadow-2xl shadow-black/60"
+          // React events bubble through portals to the card; stop them here, and close after a choice.
+          onClick={(e) => { e.stopPropagation(); setPos(null); }}
+        >
+          {children}
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
+
+export function MenuItem({
+  icon, children, onSelect, disabled, danger, title,
+}: {
+  icon?: ReactNode; children: ReactNode; onSelect: () => void;
+  disabled?: boolean; danger?: boolean; title?: string;
+}) {
+  return (
+    <button
+      role="menuitem"
+      type="button"
+      disabled={disabled}
+      title={title}
+      onClick={onSelect}
+      className={cn(
+        "flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-35 [&_svg]:size-3.5 [&_svg]:shrink-0",
+        danger ? "text-red-300/85 hover:bg-red-500/10" : "text-white/70 hover:bg-white/[0.06] hover:text-white",
+      )}
+    >
+      {icon}
+      {children}
+    </button>
+  );
+}
+
+export function MenuLabel({ children }: { children: ReactNode }) {
+  return (
+    <div className="px-3 pb-1 pt-1.5 text-[9px] font-semibold uppercase tracking-widest text-white/25">
+      {children}
+    </div>
+  );
+}
+
+export function MenuDivider() {
+  return <div className="my-1 border-t border-white/[0.06]" />;
 }
 
 // ─── StatTile ────────────────────────────────────────────────────────────────

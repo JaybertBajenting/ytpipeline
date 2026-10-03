@@ -50,7 +50,56 @@ public sealed class Channel
     /// used one and records the choice on the run.
     /// </summary>
     public List<ScriptTemplate> ScriptTemplates { get; set; } = new();
+
+    /// <summary>Optional named structure override. Empty retains least-recently-used rotation.</summary>
+    public string ScriptTemplateName { get; set; } = "";
+
+    /// <summary>
+    /// Actual source material to study on every generation. Paths are relative to the workspace
+    /// root, or absolute. Null keeps channels without a reference study unchanged.
+    /// </summary>
+    public ChannelReferenceStudy? ReferenceStudy { get; set; }
+
+    /// <summary>
+    /// House format for the YouTube description, written into the script prompt. Empty keeps the
+    /// old behaviour — "write a useful YouTube description", i.e. a few sentences.
+    /// <para>
+    /// This exists because a description is part of a channel's format, not a detail of one video:
+    /// a sourced-explainer channel wants a citation block under every upload, and a channel that
+    /// doesn't should not be made to invent one. The text lands in the prompt verbatim, so write it
+    /// as instructions to the writer, and include the accuracy rules — a model asked for a
+    /// bibliography will happily produce plausible DOIs that do not exist.
+    /// </para>
+    /// </summary>
+    public string DescriptionFormat { get; set; } = "";
+
+    /// <summary>
+    /// How long one image should stay on screen, in seconds. 0 keeps the original fast-cut
+    /// default of roughly two seconds a frame.
+    /// <para>
+    /// This is what decides how the narration is cut into beats, because there is exactly one
+    /// image per beat: a channel that changes picture every 5 seconds needs beats more than twice
+    /// as long as one that changes every 2. Getting it wrong is expensive in both directions —
+    /// too fast doubles the image bill for a video that should be calm, too slow leaves a
+    /// fast-paced channel staring at one frame.
+    /// </para>
+    /// </summary>
+    public double SecondsPerImage { get; set; }
+
     public string VisualStyle { get; set; } = "";
+
+    /// <summary>
+    /// Which backend draws this channel's frames, thumbnails and channel art: <c>gflow</c> or
+    /// <c>codex</c>. Empty follows Settings → Images.
+    /// <para>
+    /// The two don't draw alike, and a channel's look is whichever one drew its first videos.
+    /// The Old Humans was drawn by gflow; when Settings switched to codex for Barely An Expert
+    /// (2026-09-08), its next video would have come out in codex's style. A channel that names
+    /// its backend never falls back to the other one, because that would change the look.
+    /// </para>
+    /// </summary>
+    public string ImageProvider { get; set; } = "";
+
     public string VoiceNotes { get; set; } = "";
 
     /// <summary>
@@ -112,6 +161,14 @@ public sealed class Channel
     /// </summary>
     [JsonIgnore]
     public string ThumbnailInstructions { get; set; } = "";
+}
+
+public sealed class ChannelReferenceStudy
+{
+    public string SourceUrl { get; set; } = "";
+    public List<string> TranscriptPaths { get; set; } = new();
+    public List<string> ImagePaths { get; set; } = new();
+    public List<string> ThumbnailPaths { get; set; } = new();
 }
 
 /// <summary>
@@ -215,6 +272,17 @@ public sealed class ChannelIdentity
 
     /// <summary>Optional art direction for the banner. Same fallback as <see cref="AvatarPrompt"/>.</summary>
     public string BannerPrompt { get; set; } = "";
+
+    /// <summary>
+    /// Wording to letter across the banner, or empty for art only.
+    /// <para>
+    /// Banner art is drawn wordless by default, because a model asked for text unprompted spells it
+    /// wrong and puts it somewhere useless. Setting this opts the channel in: the generator then
+    /// asks for exactly this line and nothing else, inside the strip YouTube actually shows. Keep it
+    /// short — every extra word is another chance to misspell one, and the strip is only 423px tall.
+    /// </para>
+    /// </summary>
+    public string BannerHeadline { get; set; } = "";
 }
 
 public sealed class ChannelLink
