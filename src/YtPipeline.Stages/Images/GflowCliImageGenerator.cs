@@ -36,13 +36,39 @@ public sealed class GflowCliImageGenerator(
     /// </summary>
     private const int AbandonAfterConsecutiveFailures = 4;
 
+    /// <summary>
+    /// Set once per run when a browser-side failure has already been explained, so the remedy is
+    /// logged one time rather than once per failed beat across every concurrent lane.
+    /// </summary>
+    private int _browserWarned;
+
+    /// <summary>
+    /// Chrome and the Flow extension reporting that they cannot reach the page — as opposed to a
+    /// spent quota, which is what <see cref="ProviderHealthStore.LooksLikeQuotaExhaustion"/>
+    /// matches. These all mean the same thing in practice: the Flow tab is missing, signed out, or
+    /// on a host the extension has no permission for.
+    /// </summary>
+    internal static bool LooksLikeBrowserProblem(string? text) =>
+        !string.IsNullOrWhiteSpace(text)
+        && new[]
+        {
+            "CAPTCHA_FAILED",
+            "NO_FLOW_TAB",
+            "must request permission to access this host",
+            "Cannot access contents of url",
+        }.Any(m => text.Contains(m, StringComparison.OrdinalIgnoreCase));
+
     public async Task<IReadOnlyList<string>> GenerateAsync(
-        Run run, ScriptDocument script, Channel channel, CancellationToken ct, bool regenerate = false)
+        Run run, ScriptDocument script, Channel channel, CancellationToken ct,
+        bool regenerate = false, string? forceProvider = null)
     {
+        var references = ReferenceStudySources.Images(channel, run.WorkspaceRoot);
+        var cfg = settings.Current.Gflow;
+        if (references.Count > 0) references = await PrepareReferencesAsync(cfg, references, ct);
         Directory.CreateDirectory(run.ImagesDir);
         if (regenerate) ClearPngs(run.ImagesDir);
+        Volatile.Write(ref _browserWarned, 0);   // explain a browser problem once per run
 
-        var cfg = settings.Current.Gflow;
         var have = ExistingBeatIndices(run.ImagesDir);
         var beats = script.Beats.OrderBy(b => b.Index).ToList();
         var todo = beats.Where(b => !have.Contains(b.Index)).ToList();
@@ -64,6 +90,12 @@ public sealed class GflowCliImageGenerator(
         // would just serialise them again.
         await NetworkGuard.WaitForConnectivityAsync(logger, ct);
 
+        // Ask gflow whether it can generate at all before dispatching hundreds of beats at it.
+        // Without this, a disconnected browser extension is discovered one Chrome permission
+        // error at a time: a 260-beat run burned 82 identical failures before giving up, and the
+        // actual cause — the Flow tab being on the wrong URL — was only visible in the log.
+        await RequireGflowReadyAsync(cfg, ct);
+
         int failed = 0, done = 0, consecutiveFailures = 0, abandoned = 0;
         using var gate = new SemaphoreSlim(lanes);
 
@@ -78,7 +110,7 @@ public sealed class GflowCliImageGenerator(
                 if (Volatile.Read(ref abandoned) != 0) return;
 
                 var target = Path.Combine(run.ImagesDir, $"beat{beat.Index:D2}_gflow.png");
-                var ok = await GenerateOneAsync(beat, channel, target, cfg, ct);
+                var ok = await GenerateOneAsync(beat, channel, target, cfg, ct, references);
 
                 // Progress is reported on completion, so the count reflects real progress
                 // rather than dispatch order.
@@ -130,23 +162,29 @@ public sealed class GflowCliImageGenerator(
     public async Task<string> GenerateThumbnailAsync(
         Run run, ScriptDocument script, Channel channel, CancellationToken ct)
     {
-        Directory.CreateDirectory(run.OutputDir);
+        var references = ReferenceStudySources.Images(channel, run.WorkspaceRoot, thumbnail: true);
         var cfg = settings.Current.Gflow;
+        if (references.Count > 0) references = await PrepareReferencesAsync(cfg, references, ct);
+        Directory.CreateDirectory(run.OutputDir);
 
         var prompt = new StringBuilder()
             .AppendLine(ThumbnailRule(channel).TrimEnd())
+            .AppendLine(ReferenceInstruction(channel))
             .AppendLine()
             .AppendLine("=== FOR THIS TITLE ===")
             .AppendLine($"YouTube thumbnail for a video titled \"{script.Title}\".")
-            .AppendLine("Choose the ONE composition from the rule above that fits this title. Decide what the")
-            .AppendLine("everyday object is and what the consequence or goal is, then draw only those. Do not")
-            .AppendLine("write the title out — the picture is the hook.")
+            // The RULE decides composition and lettering, not this builder — see the note in
+            // CodexCliImageGenerator.BuildThumbnailPrompt. Hardcoding "do not write the title out"
+            // here silently blanked the title band on every channel whose rule asks for it.
+            .AppendLine("Choose the ONE composition from the rule above that fits this title.")
+            .AppendLine("The rule is the authority on lettering — follow exactly what it says to put in the")
+            .AppendLine("image, whether that is no words at all, a short fragment, or the complete title.")
             .Append("Horizontal 16:9.")
             .ToString();
 
         if (File.Exists(run.ThumbnailPath)) { try { File.Delete(run.ThumbnailPath); } catch { } }
 
-        var ok = await RunGflowAsync(prompt, run.ThumbnailPath, cfg, ct);
+        var ok = await RunGflowAsync(prompt, run.ThumbnailPath, cfg, ct, references: references);
         if (!ok || !File.Exists(run.ThumbnailPath))
             throw new InvalidOperationException($"gflow finished but no thumbnail at {run.ThumbnailPath}.");
 
@@ -184,13 +222,14 @@ public sealed class GflowCliImageGenerator(
     // -------------------------------------------------------------------------
 
     private async Task<bool> GenerateOneAsync(
-        ScriptBeat beat, Channel channel, string target, GflowSettings cfg, CancellationToken ct)
+        ScriptBeat beat, Channel channel, string target, GflowSettings cfg, CancellationToken ct,
+        IReadOnlyList<string> references)
     {
         var prompt = BuildBeatPrompt(beat, channel);
 
         for (int attempt = 1; attempt <= MaxAttemptsPerBeat; attempt++)
         {
-            if (await RunGflowAsync(prompt, target, cfg, ct) && File.Exists(target))
+            if (await RunGflowAsync(prompt, target, cfg, ct, references: references) && File.Exists(target))
                 return true;
 
             if (attempt < MaxAttemptsPerBeat)
@@ -211,22 +250,10 @@ public sealed class GflowCliImageGenerator(
     /// (avatar) rather than the 16:9 the video frames are locked to.
     /// </param>
     private async Task<bool> RunGflowAsync(
-        string prompt, string target, GflowSettings cfg, CancellationToken ct, string? aspect = null)
+        string prompt, string target, GflowSettings cfg, CancellationToken ct, string? aspect = null,
+        IReadOnlyList<string>? references = null)
     {
-        var args = new List<string>(cfg.ArgsTemplate)
-        {
-            prompt,
-            string.IsNullOrWhiteSpace(cfg.OutputFlag) ? "-o" : cfg.OutputFlag,
-            target,
-        };
-
-        // gflow defaults to --aspect 9:16 (vertical) and --model nano2. Both must be set
-        // explicitly: vertical frames would be sideways in a 16:9 video.
-        var wantAspect = string.IsNullOrWhiteSpace(aspect) ? cfg.Aspect : aspect;
-        if (!string.IsNullOrWhiteSpace(wantAspect)) args.AddRange(["--aspect", wantAspect]);
-        if (!string.IsNullOrWhiteSpace(cfg.Model)) args.AddRange(["--model", cfg.Model]);
-        if (!string.IsNullOrWhiteSpace(cfg.Project)) args.AddRange(["--project", cfg.Project]);
-        args.AddRange(cfg.ExtraArgs);
+        var args = BuildGenerationArgs(prompt, target, cfg, aspect, references);
 
         // Cap a single generation so one wedged browser can't stall the whole run.
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -237,6 +264,16 @@ public sealed class GflowCliImageGenerator(
             var result = await process.RunAsync(cfg.Executable, args, ct: timeout.Token);
             if (result.Success)
             {
+                // Flow Agent otherwise continues with text-only generation after a failed upload.
+                // Refuse that output so it cannot be resumed or rendered as a source-based frame.
+                if (references is { Count: > 0 } && references.Any(File.Exists)
+                    && !HasReferenceUploadEvidence(result.StdOut, references.Count))
+                {
+                    if (File.Exists(target)) File.Delete(target);
+                    throw new ReferenceAttachmentException(
+                        "Flow did not confirm every reference-image upload. Its output was rejected. " +
+                        "Check Flow's reference uploads, or select a provider that attaches all source images.");
+                }
                 // Any success clears a previous benching, so the provider comes straight back
                 // into rotation the moment its quota resets.
                 health.MarkHealthy(ImageProviders.Gflow);
@@ -244,7 +281,20 @@ public sealed class GflowCliImageGenerator(
             }
 
             var err = Trim(result.StdErr);
+            if (result.StdErr.Contains("at most one local reference file", StringComparison.OrdinalIgnoreCase))
+                throw new ReferenceAttachmentException("Flow rejected multiple local references. Stop this run and update the app to upload references before generation.");
             logger.LogWarning("gflow exited {Code}: {Err}", result.ExitCode, err);
+
+            // A browser-side failure repeats identically on every beat and never clears on its
+            // own, so say what fixes it — once — instead of leaving the user to read 80 copies of
+            // Chrome's permission error and work out that the tab is on the wrong host.
+            if (LooksLikeBrowserProblem(err) && Interlocked.Exchange(ref _browserWarned, 1) == 0)
+                logger.LogWarning(
+                    "gflow cannot reach the Flow page. This is not a quota problem and will not " +
+                    "clear by retrying: open {Url} in Chrome, sign in, and leave that tab open. " +
+                    "The extension attaches only to that exact page — a tab on flow.google.com " +
+                    "produces this error on every beat.",
+                    GflowStatus.FlowTabUrl);
 
             // Bench it ONLY for quota errors. A CAPTCHA or sign-in failure is fixable, and
             // silently routing around it would hide a problem worth telling the user about.
@@ -267,6 +317,7 @@ public sealed class GflowCliImageGenerator(
         {
             throw; // user pressed Stop
         }
+        catch (ReferenceAttachmentException) { throw; }
         catch (OperationCanceledException)
         {
             logger.LogWarning("gflow timed out after {Seconds}s.", cfg.TimeoutSeconds);
@@ -292,20 +343,114 @@ public sealed class GflowCliImageGenerator(
 
         var sb = new StringBuilder()
             .AppendLine(StyleRule(channel).TrimEnd())
+            .AppendLine(ReferenceInstruction(channel))
             .AppendLine()
             .AppendLine("=== THIS FRAME ===");
 
         if (narration.Length > 0)
             sb.AppendLine($"The narrator is saying: {narration}");
 
-        sb.AppendLine($"Draw exactly one image illustrating that line: {visual}")
-          .AppendLine()
-          .AppendLine("Keep the recurring visual language consistent with the rest of the set: the same")
-          .AppendLine("simple stick figures with round heads and dot eyes, the same thick uneven black")
-          .Append("outlines, the same flat colour palette. One single clear idea, nothing extra.");
+        sb.AppendLine($"Draw exactly one image illustrating that line: {visual}");
+
+        // The closing anchor is what keeps characters looking like the same characters across a
+        // few hundred separate calls. It used to hardcode "stick figures with round heads and dot
+        // eyes", which is true of two channels here and wrong for every other one — a channel is
+        // the authority on how it is drawn, so take the anchor from its own visualStyle.
+        var anchor = string.IsNullOrWhiteSpace(channel.VisualStyle)
+            ? "the same characters, the same outlines and the same flat colour palette"
+            : channel.VisualStyle.Trim();
+
+        sb.AppendLine()
+          .AppendLine("Keep the recurring visual language consistent with the rest of the set:")
+          .AppendLine(anchor)
+          .Append("One single clear idea, nothing extra.");
 
         return sb.ToString();
     }
+
+    internal static IReadOnlyList<string> BuildGenerationArgs(
+        string prompt, string target, GflowSettings cfg, string? aspect = null,
+        IReadOnlyList<string>? references = null)
+    {
+        var args = new List<string>(cfg.ArgsTemplate)
+        {
+            prompt,
+            string.IsNullOrWhiteSpace(cfg.OutputFlag) ? "-o" : cfg.OutputFlag,
+            target,
+        };
+        var wantAspect = string.IsNullOrWhiteSpace(aspect) ? cfg.Aspect : aspect;
+        if (!string.IsNullOrWhiteSpace(wantAspect)) args.AddRange(["--aspect", wantAspect]);
+        if (!string.IsNullOrWhiteSpace(cfg.Model)) args.AddRange(["--model", cfg.Model]);
+        // No project flag: `flow image` accepts none as of CLI 2.0.7 — the project moved to the
+        // backend's DEFAULT_PROJECT environment variable, and `--project-id` survives only on
+        // `upload`/`video`, marked deprecated. Passing cfg.Project here fails the whole call with
+        // "unrecognized arguments", so a filled-in Project box must not reach the command line.
+        args.AddRange(cfg.ExtraArgs);
+        // The installed Flow Agent CLI uploads these local files and sends their media IDs as
+        // IMAGE_INPUT_TYPE_REFERENCE. Every beat and thumbnail gets its own complete attachment set.
+        if (references is { Count: > 0 })
+        {
+            args.Add("--ref");
+            args.AddRange(references);
+        }
+        return args;
+    }
+
+    internal static bool HasReferenceUploadEvidence(string stdout, int expected) =>
+        System.Text.RegularExpressions.Regex.Matches(stdout, @"(?m)^\s*media_id=\S+").Count == expected;
+
+    private static string ReferenceInstruction(Channel channel) =>
+        channel.ReferenceStudy is null ? "" :
+        $"Actual reference images from {channel.ReferenceStudy.SourceUrl} are attached to this call. " +
+        "Study their linework, faces, flat fills, scene density and framing. Use that visual language " +
+        "for this original scene, not the reference's specific content. Do not recreate the reference sheet or its labels.";
+
+    private async Task<IReadOnlyList<string>> PrepareReferencesAsync(
+        GflowSettings cfg, IReadOnlyList<string> references, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        var probe = await process.RunAsync(cfg.Executable, cfg.ArgsTemplate.Concat(["--help"]), ct: timeout.Token);
+        if (!probe.Success || !(probe.StdOut + probe.StdErr).Contains("--ref", StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                "This channel requires actual image references, but the configured Flow command does not " +
+                "confirm --ref support. Configure Flow Agent's image command with --ref support or use Codex. " +
+                "Generation has not started; text-only fallback is not allowed.");
+        // New Flow CLI accepts many media IDs but only one local path. Upload separately;
+        // its generation stdout reports OUTPUT media IDs, not reference-upload evidence.
+        if (!(probe.StdOut + probe.StdErr).Contains("media ID", StringComparison.OrdinalIgnoreCase))
+            return references;
+        if (references.Count > 10)
+            throw new ReferenceAttachmentException("Flow supports at most ten uploaded references; generation has not started.");
+        var ids = new List<string>();
+        foreach (var path in references)
+        {
+            using var uploadTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            uploadTimeout.CancelAfter(TimeSpan.FromSeconds(cfg.TimeoutSeconds));
+            var upload = await process.RunAsync(cfg.Executable, ["upload", path], ct: uploadTimeout.Token);
+            var id = upload.Success ? ParseUploadedReferenceId(upload.StdOut) : null;
+            if (id is null)
+                throw new ReferenceAttachmentException($"Flow did not confirm the reference upload for {Path.GetFileName(path)}. Generation has not started. {Trim(upload.StdErr)}");
+            ids.Add(id);
+        }
+        logger.LogInformation("Flow uploaded all {Count} source references; every frame will receive their media IDs.", ids.Count);
+        return ids;
+    }
+
+    internal static string? ParseUploadedReferenceId(string output)
+    {
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(output);
+            if (document.RootElement.TryGetProperty("media_id", out var value)
+                && value.ValueKind == System.Text.Json.JsonValueKind.String
+                && value.GetString() is { Length: > 0 } id && !id.Any(char.IsWhiteSpace)) return id;
+        }
+        catch (System.Text.Json.JsonException) { }
+        return null;
+    }
+
+    private sealed class ReferenceAttachmentException(string message) : InvalidOperationException(message);
 
     /// <summary>
     /// Thumbnail rule, falling back to the frame rule when a channel has none. Kept separate from
@@ -335,6 +480,42 @@ public sealed class GflowCliImageGenerator(
         if (!Directory.Exists(dir)) return;
         foreach (var f in Directory.EnumerateFiles(dir, "*.png"))
             try { File.Delete(f); } catch { /* ignore */ }
+    }
+
+    /// <summary>
+    /// Refuses to start when gflow says it cannot generate, naming the fix.
+    /// </summary>
+    /// <remarks>
+    /// Only a probe that ran and clearly reported "not connected" blocks the run. If the probe
+    /// itself fails — missing binary, timeout, output we cannot parse — the run proceeds: a check
+    /// we could not perform is not evidence of a problem, and refusing to work because a
+    /// diagnostic broke would be worse than the thing it diagnoses.
+    /// </remarks>
+    private async Task RequireGflowReadyAsync(GflowSettings cfg, CancellationToken ct)
+    {
+        if (cfg.CheckArgs.Count == 0) return;
+
+        GflowStatus status;
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(60));
+            var probe = await process.RunAsync(cfg.Executable, cfg.CheckArgs, ct: timeout.Token);
+            if (!probe.Success) return;
+            status = GflowStatus.Parse(probe.StdOut);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not check gflow's status — starting anyway.");
+            return;
+        }
+
+        if (status.CanGenerate) return;
+
+        Volatile.Write(ref _browserWarned, 1);   // the remedy is in the exception; don't repeat it
+        throw new InvalidOperationException(
+            $"gflow is not ready to generate (status: {status.State}). {status.Remedy}");
     }
 
     private static string Trim(string s) =>

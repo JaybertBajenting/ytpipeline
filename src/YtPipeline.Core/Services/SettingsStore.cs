@@ -15,9 +15,13 @@ public sealed class SettingsStore
 
     public SettingsStore(string workspaceRoot)
     {
+        WorkspaceRoot = Path.GetFullPath(workspaceRoot);
         _path = Path.Combine(workspaceRoot, "settings.json");
         _current = Load();
     }
+
+    /// <summary>Base directory for workspace-relative channel reference paths.</summary>
+    public string WorkspaceRoot { get; }
 
     /// <summary>The live settings. Treat as read-only; call <see cref="Save"/> to change them.</summary>
     public AppSettings Current
@@ -83,8 +87,37 @@ public sealed class SettingsStore
         // Naming the same backend the frames already use is just the inherited behaviour.
         if (s.ThumbnailProvider == s.ImageProvider) s.ThumbnailProvider = "";
 
+        s.CodexModel = s.CodexModel?.Trim().ToLowerInvariant() switch
+        {
+            // Needs Codex CLI 0.159+; 0.155.1 answers "not supported when using Codex with a ChatGPT account".
+            "gpt-6.1-sol" => "gpt-6.1-sol",
+            "gpt-6-sol" => "gpt-6-sol",
+            "gpt-6-luna" => "gpt-6-luna",
+            "gpt-5.6-sol" => "gpt-5.6-sol",
+            "gpt-5.6-terra" => "gpt-5.6-terra",
+            "gpt-5.6-luna" => "gpt-5.6-luna",
+            "gpt-5.5" => "gpt-5.5",
+            _ => "gpt-6-astra",
+        };
+        s.CodexReasoningEffort = s.CodexReasoningEffort?.Trim().ToLowerInvariant() switch
+        {
+            "medium" => "medium",
+            "high" => "high",
+            "xhigh" => "xhigh",
+            "max" => "max",
+            "ultra" => "ultra",
+            _ => "low",
+        };
+        // Codex exposes narrower effort ranges for Luna and the legacy GPT-5.5 model.
+        if (s.CodexModel == "gpt-5.5" && s.CodexReasoningEffort is ("max" or "ultra"))
+            s.CodexReasoningEffort = "xhigh";
+        else if (s.CodexModel is ("gpt-6-luna" or "gpt-5.6-luna")
+                 && s.CodexReasoningEffort == "ultra")
+            s.CodexReasoningEffort = "max";
+
         s.QuotaCooldownMinutes = Math.Clamp(s.QuotaCooldownMinutes, 5, 24 * 60);
         s.DefaultWordsPerMinute = Math.Clamp(s.DefaultWordsPerMinute, 60, 320);
+        s.ElevenLabsModel = VoiceModelIds.Clean(s.ElevenLabsModel);
         s.VoiceGain = Math.Clamp(s.VoiceGain, 0.1, 4.0);
         s.MusicVolume = Math.Clamp(s.MusicVolume, 0.0, 1.0);
         s.Gflow ??= new GflowSettings();

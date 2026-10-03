@@ -121,6 +121,9 @@ app.MapGet("/api/provider-health", () =>
             provider = p,
             preferred = p == cfg.ImageProvider,
             standby = p == cfg.ImageFallbackProvider,
+            // "Ran dry, and the cooldown has not lapsed" — NOT "cannot be used". Signing Flow into
+            // another account resets the real limit, and nothing the CLI exposes reports it, so
+            // asking for this provider by hand still runs it.
             benched = until is not null,
             benchedUntilUtc = until,
             retryInMinutes = until is null ? (double?)null
@@ -152,16 +155,28 @@ app.MapGet("/api/settings/check-gflow", async () =>
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var result = await runner.RunAsync(cfg.Executable, cfg.CheckArgs, ct: cts.Token);
         var output = result.StdOut.Trim();
+
+        // The exit code only says the CLI ran. `flow status` returns 0 while reporting
+        // "extension_connected: False", so trusting it reported gflow healthy during a run in
+        // which every single beat failed. Read what the probe actually said instead.
+        var status = YtPipeline.Stages.Images.GflowStatus.Parse(output);
         return J(new
         {
             installed = result.Success,
+            connected = result.Success && status.CanGenerate,
+            state = status.State,
+            remedy = result.Success ? status.Remedy : null,
             version = output.Length > 300 ? output[..300] : output,
             error = result.Success ? null : result.StdErr.Trim(),
         });
     }
     catch (Exception ex)
     {
-        return J(new { installed = false, version = (string?)null, error = ex.Message });
+        return J(new
+        {
+            installed = false, connected = false, state = "unknown",
+            remedy = (string?)null, version = (string?)null, error = ex.Message,
+        });
     }
 });
 
@@ -293,8 +308,15 @@ static object Describe(string id, YtPipeline.Core.Models.Channel c) => new
     // omitting these two would have wiped the whole template library on the next edit.
     c.ScriptVoiceRules,
     c.ScriptTemplates,
+    c.ScriptTemplateName,
     c.ScriptStructure,
+    c.DescriptionFormat,
+    c.SecondsPerImage,
     c.VisualStyle,
+    c.ImageProvider,
+    // Not edited in the UI, but it must survive a save: without it here, saving Barely An Expert
+    // from the Channels page would have written its reference images out of the file.
+    c.ReferenceStudy,
     c.VoiceNotes,
     c.Voice,
     c.Music,
@@ -444,10 +466,23 @@ app.MapPost("/api/script", (CreateScriptRequest req) =>
 // --- Stages 2-5 (background jobs) -------------------------------------------
 // `music` applies to the video stage only: false re-assembles voice-only (and drops the music
 // credit from the description), true forces the normal selection, omitted keeps the run's last
-// answer.
-app.MapPost("/api/runs/{id}/stage/{stage}", (string id, string stage, string? privacy, bool force = false, bool? music = null) =>
+// answer. `model` is the same idea for the voice stage: an ElevenLabs model id for this video,
+// "default" to go back to the channel's, omitted to keep what it used last time.
+app.MapPost("/api/runs/{id}/stage/{stage}", (string id, string stage, string? privacy, string? provider, bool force = false, bool? music = null, string? model = null) =>
 {
     var run = pipeline.Runs.Resolve(id);
+
+    if (model is not null && !model.Trim().Equals("default", StringComparison.OrdinalIgnoreCase)
+        && YtPipeline.Core.Models.VoiceModelIds.Clean(model) == "")
+        return Results.BadRequest(new { error = $"'{model}' isn't an ElevenLabs model id." });
+    var voiceModel = model?.Trim().Equals("default", StringComparison.OrdinalIgnoreCase) == true ? "" : model;
+
+    // A moved video's frames, voice and video aren't on this PC, so no stage can run until it's back.
+    if (pipeline.Runs.LoadManifest(run).Archive is { } moved)
+        return Results.Conflict(new
+        {
+            error = $"This video's files are in Google Drive ({moved.Location}). Bring it back first.",
+        });
 
     // One job per run. Two stages writing the same folder race on the same files and, for the
     // image stages, spend quota twice on the same beats.
@@ -465,10 +500,13 @@ app.MapPost("/api/runs/{id}/stage/{stage}", (string id, string stage, string? pr
         // fails (expired CLI token, rate limit) the run is otherwise a dead end that can only be
         // deleted and recreated.
         "script" => ct => pipeline.ScriptAsync(run, ct),
-        "images" => ct => pipeline.ImagesAsync(run, ct, regenerate: force),
-        "voice" => ct => pipeline.VoiceAsync(run, ct),
+        "images" => ct => pipeline.ImagesAsync(run, ct, regenerate: force, provider: provider),
+        "voice" => ct => pipeline.VoiceAsync(run, ct, voiceModel),
         "video" => ct => pipeline.VideoAsync(run, ct, music),
         "thumbnail" => ct => pipeline.ThumbnailAsync(run, ct),
+        // Description only — the video and its frames are untouched, so this is safe to run on a
+        // finished video whose channel format changed after it was written.
+        "description" => ct => pipeline.DescriptionAsync(run, ct),
         "upload" => ct => pipeline.UploadAsync(run, privacy ?? "private", ct),
         // Extra distribution targets. A skipped publish (platform not configured) completes the
         // job normally — the reason lands in the manifest and the log.
@@ -539,6 +577,74 @@ app.MapGet("/api/runs/{id}/image/{name}", (string id, string name) =>
     return File.Exists(path) ? Results.File(path, "image/png") : Results.NotFound();
 });
 
+// Removing one frame is how a single bad image gets redone: the images stage only fills beats
+// that have no PNG on disk, so the next run regenerates exactly what was deleted and nothing else.
+app.MapDelete("/api/runs/{id}/image/{name}", (string id, string name) =>
+{
+    var run = pipeline.Runs.Resolve(id);
+    // GetFileName strips any directory part, so a crafted name cannot escape the run's folder.
+    var safe = Path.GetFileName(name);
+    var path = Path.Combine(run.ImagesDir, safe);
+    if (!File.Exists(path)) return Results.NotFound();
+    File.Delete(path);
+    return Results.Ok(new { deleted = safe });
+});
+
+// --- Google Drive ------------------------------------------------------------
+// Moves a video's folder into Google Drive for desktop, which uploads it. The manifest and thumbnail
+// stay, so the video keeps its place in the list, marked as in Drive. Both directions run as jobs:
+// they copy hundreds of MB, and the one-job-per-run rule keeps a stage from racing the copy.
+app.MapPost("/api/runs/{id}/drive/move", (string id, ILogger<Program> logger,
+    YtPipeline.Stages.Process.ProcessRunner process) =>
+{
+    var run = pipeline.Runs.Resolve(id);
+    if (jobs.ActiveJobFor(run.RunId) is { } busy)
+        return Results.Conflict(new { error = $"'{busy.Stage}' is running for this video. Wait for it, or stop it first." });
+    var s = settingsStore.Current;
+    Action<string> log = line => logger.LogInformation("{Line}", line);
+
+    // rclone uploads straight to Google, so the space comes back as soon as its check passes. Copying
+    // into the Drive folder is the fallback: it works, but the Drive app keeps a cached copy on this PC.
+    if (!string.IsNullOrWhiteSpace(s.RcloneRemote))
+    {
+        var rclone = new YtPipeline.Stages.Storage.RcloneArchiver(process, pipeline.Runs);
+        var mirror = string.IsNullOrWhiteSpace(s.DriveArchiveFolder) ? null : s.DriveArchiveFolder;
+        var upload = jobs.Start(run.RunId, "upload to Google Drive", ct =>
+            rclone.MoveOutAsync(run, s.RcloneExecutable, s.RcloneRemote, mirror, log, ct));
+        return J(new { jobId = upload.Id });
+    }
+    if (string.IsNullOrWhiteSpace(s.DriveArchiveFolder))
+        return Results.BadRequest(new { error = "Set up Google Drive in Settings → Storage first." });
+
+    var archiver = new YtPipeline.Core.Services.RunArchiver(pipeline.Runs);
+    var job = jobs.Start(run.RunId, "move to Google Drive", ct => Task.Run(() =>
+        archiver.MoveOut(run, s.DriveArchiveFolder, log, ct), ct));
+    return J(new { jobId = job.Id });
+});
+
+app.MapPost("/api/runs/{id}/drive/restore", (string id, ILogger<Program> logger,
+    YtPipeline.Stages.Process.ProcessRunner process) =>
+{
+    var run = pipeline.Runs.Resolve(id);
+    if (jobs.ActiveJobFor(run.RunId) is { } busy)
+        return Results.Conflict(new { error = $"'{busy.Stage}' is running for this video. Wait for it, or stop it first." });
+    Action<string> log = line => logger.LogInformation("{Line}", line);
+
+    // A video comes back the way it left: an rclone upload records its remote path, a folder copy doesn't.
+    if (pipeline.Runs.LoadManifest(run).Archive?.Remote is not null)
+    {
+        var rclone = new YtPipeline.Stages.Storage.RcloneArchiver(process, pipeline.Runs);
+        var exe = settingsStore.Current.RcloneExecutable;
+        var download = jobs.Start(run.RunId, "bring back from Google Drive", ct => rclone.BringBackAsync(run, exe, log, ct));
+        return J(new { jobId = download.Id });
+    }
+
+    var archiver = new YtPipeline.Core.Services.RunArchiver(pipeline.Runs);
+    var job = jobs.Start(run.RunId, "bring back from Google Drive", ct => Task.Run(() =>
+        archiver.BringBack(run, log, ct), ct));
+    return J(new { jobId = job.Id });
+});
+
 app.MapGet("/api/runs/{id}/audio", (string id) =>
 {
     var run = pipeline.Runs.Resolve(id);
@@ -553,6 +659,36 @@ app.MapGet("/api/runs/{id}/video", (string id) =>
     return File.Exists(run.VideoPath)
         ? Results.File(run.VideoPath, "video/mp4", enableRangeProcessing: true)
         : Results.NotFound();
+});
+
+// A browser page can't open a folder, but this server runs on the same PC, so it asks Explorer to.
+// The path comes from the run's folder on disk — nothing from the request reaches the command line.
+app.MapPost("/api/runs/{id}/reveal", (string id, ILogger<Program> logger) =>
+{
+    if (!OperatingSystem.IsWindows())
+        return Results.BadRequest(new { error = "Opening a folder is only supported on Windows." });
+
+    var run = pipeline.Runs.Resolve(id);
+
+    // A video moved to Google Drive is opened where it now lives.
+    if (pipeline.Runs.LoadManifest(run).Archive is { } moved)
+    {
+        if (string.IsNullOrWhiteSpace(moved.Location))
+            return Results.NotFound(new { error = "Set your Google Drive folder in Settings → Storage to open it in File Explorer, or find it at drive.google.com." });
+        if (!Directory.Exists(moved.Location))
+            return Results.NotFound(new { error = $"{moved.Location} isn't showing yet. Is Google Drive for desktop running? A new upload can take a minute to appear." });
+        YtPipeline.Web.ExplorerWindow.Reveal(moved.Location, isFile: false, logger);
+        return J(new { opened = moved.Location });
+    }
+
+    if (!Directory.Exists(run.OutputDir))
+        return Results.NotFound(new { error = "This video's folder no longer exists." });
+
+    // With a finished video, open its folder with final.mp4 highlighted; before that, just the folder.
+    var hasVideo = File.Exists(run.VideoPath);
+    var target = hasVideo ? run.VideoPath : run.OutputDir;
+    YtPipeline.Web.ExplorerWindow.Reveal(target, isFile: hasVideo, logger);
+    return J(new { opened = target });
 });
 
 app.MapGet("/api/runs/{id}/thumbnail", (string id) =>

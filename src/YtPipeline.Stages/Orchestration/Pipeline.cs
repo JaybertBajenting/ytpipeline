@@ -24,10 +24,20 @@ public sealed class Pipeline(
     IVideoAssembler videoGen,
     IVideoUploader uploader,
     IEnumerable<ISocialPublisher> publishers,
+    SourceVerifier sources,
+    YtPipeline.Stages.Process.ProcessRunner process,
+    YtPipeline.Stages.Video.FfmpegOptions ffmpeg,
     ILogger<Pipeline> logger)
 {
     public RunManager Runs => runs;
     public ChannelLoader Channels => channels;
+
+    /// <summary>
+    /// How many times the description is rewritten while citations fail to verify. Bounded because
+    /// a model that cannot find a real source for a claim will not find one on the tenth try
+    /// either — at that point the honest move is to publish fewer sources.
+    /// </summary>
+    private const int MaxDescriptionAttempts = 3;
 
     // ----- Stage 1 -----------------------------------------------------------
     public async Task<ScriptDocument> ScriptAsync(Run run, CancellationToken ct)
@@ -72,15 +82,31 @@ public sealed class Pipeline(
     }
 
     // ----- Stage 2 -----------------------------------------------------------
-    public async Task ImagesAsync(Run run, CancellationToken ct, bool regenerate = false)
+    public async Task ImagesAsync(
+        Run run, CancellationToken ct, bool regenerate = false, string? provider = null)
     {
         RequireApproved(run, "script");
         var channel = channels.Load(run.Channel);
         var script = runs.LoadScript(run);
-        logger.LogInformation("[2/5] images — {Count} beats{Mode}", script.Beats.Count,
-            regenerate ? " (regenerate)" : "");
+        regenerate |= runs.LoadManifest(run).Stages.Images.Get<bool>("needsRegeneration");
+        logger.LogInformation("[2/5] images — {Count} beats{Mode}{Provider}", script.Beats.Count,
+            regenerate ? " (regenerate)" : "",
+            string.IsNullOrWhiteSpace(provider) ? "" : $" on {provider}");
 
-        var images = await imageGen.GenerateAsync(run, script, channel, ct, regenerate);
+        var archived = runs.PrepareImageGeneration(run, regenerate);
+        if (archived is not null)
+            logger.LogInformation("Previous images preserved at {Path}; generating a new set.", archived);
+        // Preparation already isolated the old set. Never ask a backend to delete active frames:
+        // after a timeout or failed preflight, the next attempt resumes only this new generation.
+        var images = await imageGen.GenerateAsync(run, script, channel, ct, regenerate: false, forceProvider: provider);
+        var covered = images.Select(ImageSet.BeatIndexOf).Where(i => i.HasValue)
+            .Select(i => i!.Value).ToHashSet();
+        var missing = script.Beats.Where(b => !covered.Contains(b.Index)).Select(b => b.Index).ToList();
+        if (missing.Count > 0)
+            throw new InvalidOperationException($"Images are incomplete: {missing.Count} beats remain. Resume image generation before rendering.");
+        if (!script.Beats.Select(b => (b.Index, b.Narration, b.ImagePrompt))
+                .SequenceEqual(runs.LoadScript(run).Beats.Select(b => (b.Index, b.Narration, b.ImagePrompt))))
+            throw new InvalidOperationException("The storyboard changed during image generation. Generate images for the updated script before rendering.");
         runs.UpdateManifest(run, m =>
         {
             m.Stages.Images.MarkDone(run.ImagesDir);
@@ -90,21 +116,77 @@ public sealed class Pipeline(
     }
 
     // ----- Stage 3 -----------------------------------------------------------
-    public async Task VoiceAsync(Run run, CancellationToken ct)
+    /// <param name="model">
+    /// ElevenLabs model for this video only. Null keeps the one this video was last voiced with by
+    /// choice (so a Redo from the card doesn't quietly switch back); "" goes back to the channel's.
+    /// </param>
+    public async Task VoiceAsync(Run run, CancellationToken ct, string? model = null)
     {
         var channel = channels.Load(run.Channel);
         var script = runs.LoadScript(run);
         logger.LogInformation("[3/5] voice");
 
-        var audioPath = await voiceGen.GenerateAsync(run, script, channel, ct);
+        var choice = VoiceModelChoice(model, runs.LoadManifest(run).Stages.Voice.Get<string>("modelChoice"));
+        var modelUsed = voiceGen.ModelFor(channel, choice);
+        if (choice is not null)
+            logger.LogInformation("Voicing with {Model}, picked for this video.", choice);
+
+        runs.UpdateManifest(run, m =>
+        {
+            m.Stages.Voice.Done = false;
+            m.Stages.Voice.CompletedUtc = null;
+            InvalidateVideo(m);
+        });
+        // Some TTS responses contain no alignment. Preserve the previous file outside the active
+        // path so that response cannot accidentally reuse timing from a different voiceover.
+        if (File.Exists(run.AlignmentPath))
+            File.Move(run.AlignmentPath, run.AlignmentPath + ".previous_" + Guid.NewGuid().ToString("N"));
+        var audioPath = await voiceGen.GenerateAsync(run, script, channel, ct, choice);
+        if (script.NarrationForVoice() != runs.LoadScript(run).NarrationForVoice())
+            throw new InvalidOperationException("The narration changed while generating voice. Generate voice for the updated script before rendering.");
         var seconds = Mp3Duration.GetSeconds(audioPath);
         runs.UpdateManifest(run, m =>
         {
             m.Stages.Voice.MarkDone(audioPath);
             m.Stages.Voice.Set("seconds", Math.Round(seconds, 1));
+            // What voiced the mp3 on disk, whatever it came from — the channel's model can change later.
+            if (!string.IsNullOrEmpty(modelUsed)) m.Stages.Voice.Set("model", modelUsed);
+            if (choice is not null) m.Stages.Voice.Set("modelChoice", choice);
+            else m.Stages.Voice.Clear("modelChoice");
         });
 
         CalibrateSpeakingRate(channel, script, seconds);
+        UpdateChapterTimestamps(run, script);
+    }
+
+    /// <summary>
+    /// This video's own model: the one just asked for, else the one it kept from last time.
+    /// "" means "back to the channel's", which clears it. Null = no model of its own.
+    /// </summary>
+    internal static string? VoiceModelChoice(string? requested, string? remembered)
+    {
+        if (requested is null) return string.IsNullOrWhiteSpace(remembered) ? null : remembered;
+        var clean = VoiceModelIds.Clean(requested);
+        return clean == "" ? null : clean;
+    }
+
+    private static void InvalidateVideo(Manifest manifest)
+    {
+        manifest.Stages.Video.Done = false;
+        manifest.Stages.Video.CompletedUtc = null;
+        manifest.Review.VideoApproved = false;
+    }
+
+    private void UpdateChapterTimestamps(Run run, ScriptDocument script)
+    {
+        if (!File.Exists(run.AlignmentPath)) return;
+        var alignment = Json.ReadFile<AudioAlignment>(run.AlignmentPath);
+        var description = YtPipeline.Stages.Video.ChapterTimestamps.TryAlign(script, alignment);
+        if (description is null || description == script.Description) return;
+        script.Description = description;
+        runs.SaveScript(run, script);
+        runs.UpdateManifest(run, m => m.Publish.Description = description);
+        logger.LogInformation("Chapter timestamps updated from the completed narration alignment.");
     }
 
     /// <summary>
@@ -185,6 +267,13 @@ public sealed class Pipeline(
     {
         var channel = channels.Load(run.Channel);
         var script = runs.LoadScript(run);
+        // A failed preflight also means the old output cannot be advertised as current. Clear
+        // readiness before checking assets; only a successful assembly can restore it.
+        var ready = runs.UpdateManifest(run, InvalidateVideo);
+        if (!ready.Stages.Voice.Done || !ready.Stages.Images.Done)
+            throw new InvalidOperationException("The current script needs completed voice and image stages before rendering. Existing files may belong to the previous version.");
+        RequireCurrentVoiceAlignment(run, script);
+        UpdateChapterTimestamps(run, script);
         var images = LoadImagePaths(run, script);
         logger.LogInformation("[video] assembling final.mp4");
 
@@ -195,15 +284,6 @@ public sealed class Pipeline(
         // Build a music playlist sized to cover the full video length.
         // Returns empty list (no music) if disabled, library is empty, or selection fails.
         var audioSeconds = Mp3Duration.GetSeconds(run.AudioPath);
-        // ffmpeg writes with -y, so it truncates the previous final.mp4 the moment it starts. If
-        // this attempt then fails, a Done flag left over from an earlier success would point at a
-        // broken file and the UI would call it ready. Clear it up front and let success re-set it.
-        runs.UpdateManifest(run, m =>
-        {
-            m.Stages.Video.Done = false;
-            m.Stages.Video.CompletedUtc = null;
-        });
-
         IReadOnlyList<string> musicPaths;
         if (wantMusic == false)
         {
@@ -262,8 +342,48 @@ public sealed class Pipeline(
         var channel = channels.Load(channelId);
         var target = channels.BrandImagePath(channelId, kind);
         logger.LogInformation("[brand] {Kind} for {Channel}", kind, channel.Name);
-        return await imageGen.GenerateBrandImageAsync(channel, kind, target, ct);
+        var path = await imageGen.GenerateBrandImageAsync(channel, kind, target, ct);
+
+        if (kind == BrandImage.Banner) await EnsureBannerIsUploadableAsync(path, ct);
+        return path;
     }
+
+    /// <summary>
+    /// Scales a banner up to YouTube's size when the backend returned something smaller.
+    /// </summary>
+    /// <remarks>
+    /// gflow's <c>image</c> command takes aspect NAMES and has no size or resolution flag at all,
+    /// so "landscape" comes back 1376x768 however large a target the prompt asks for. YouTube's
+    /// minimum banner upload is 2048x1152, which means every gflow banner was below the floor and
+    /// would have been rejected at upload — silently, because nothing here looked at the pixels.
+    /// codex honours the requested size and lands on 2560x1440 already, so this is a no-op there.
+    /// <para>
+    /// The 1376x768 the provider returns is 1.792:1 against the 1.778:1 YouTube wants, so scaling
+    /// to exactly 2560x1440 stretches by 0.8% — invisible, and preferable to cropping content out
+    /// of a composition whose edges were deliberately placed against the safe area.
+    /// </para>
+    /// </remarks>
+    private async Task EnsureBannerIsUploadableAsync(string path, CancellationToken ct)
+    {
+        var (w, h) = ImageSize.Read(path);
+        if (w <= 0) return;                                              // not a PNG we can measure
+        if (w >= BrandImage.BannerWidth && h >= BrandImage.BannerHeight) return;
+
+        logger.LogInformation(
+            "Banner came back {W}x{H}, below YouTube's {Min}x{MinH} minimum — scaling to {TW}x{TH}.",
+            w, h, 2048, 1152, BrandImage.BannerWidth, BrandImage.BannerHeight);
+
+        var scaled = path + ".scaled.png";
+        await process.RunOrThrowAsync(ffmpeg.Executable, new[]
+        {
+            "-y", "-i", path,
+            "-vf", $"scale={BrandImage.BannerWidth}:{BrandImage.BannerHeight}:flags=lanczos",
+            scaled,
+        }, ct: ct);
+
+        File.Move(scaled, path, overwrite: true);
+    }
+
 
     /// <summary>Regenerate the YouTube thumbnail on demand.</summary>
     public async Task ThumbnailAsync(Run run, CancellationToken ct)
@@ -271,6 +391,87 @@ public sealed class Pipeline(
         var channel = channels.Load(run.Channel);
         var script = runs.LoadScript(run);
         await GenerateThumbnailInternal(run, channel, script, ct);
+    }
+
+    /// <summary>
+    /// Rewrites the YouTube description to the channel's house format, leaving the video alone.
+    /// </summary>
+    /// <remarks>
+    /// Runs on its own because the description is the only part of a finished video that is cheap
+    /// to redo: the narration is voiced and every beat has a frame, so regenerating the script to
+    /// fix the text under the video would discard all of it. This is also how a change to the
+    /// channel's format reaches videos that already exist.
+    /// </remarks>
+    public async Task DescriptionAsync(Run run, CancellationToken ct)
+    {
+        var channel = channels.Load(run.Channel);
+        var script = runs.LoadScript(run);
+        logger.LogInformation("[description] rewriting for '{Title}'", script.Title);
+
+        if (scriptGen is not ClaudeCliScriptGenerator claude)
+            throw new InvalidOperationException("The description rewrite needs the Claude script generator.");
+
+        // Write, then CHECK — every citation is looked up in Crossref and Open Library. Anything
+        // that cannot be found is named back to the writer and the description is written again,
+        // because a fabricated citation reads exactly like a real one and no amount of re-reading
+        // catches it. Whatever survives is corrected to match the record and given its real link.
+        var description = "";
+        var rejected = new List<string>();
+
+        for (var attempt = 1; attempt <= MaxDescriptionAttempts; attempt++)
+        {
+            description = await claude.RewriteDescriptionAsync(channel, script, ct, rejected);
+            var checks = await sources.VerifyAsync(description, ct);
+
+            if (checks.Count == 0)
+            {
+                logger.LogInformation("Description has no citations to verify.");
+                break;
+            }
+
+            // Only citations the databases answered about, and denied. One that could not be
+            // checked at all is left alone rather than rewritten away.
+            var bad = checks.Where(c => c.Fabricated).Select(c => c.Entry.Title).ToList();
+            var unchecked_ = checks.Count(c => !c.Checked);
+            logger.LogInformation(
+                "Source check {Attempt}/{Max}: {Good} of {Total} verified{Unchecked}.",
+                attempt, MaxDescriptionAttempts, checks.Count(c => c.Found), checks.Count,
+                unchecked_ > 0 ? $", {unchecked_} could not be checked and were kept" : "");
+
+            if (bad.Count == 0)
+            {
+                description = SourceVerifier.ApplyCorrections(description, checks);
+                break;
+            }
+
+            // Last attempt: keep what verified and drop the rest rather than publishing a citation
+            // nothing can find.
+            if (attempt == MaxDescriptionAttempts)
+            {
+                logger.LogWarning(
+                    "Dropping {Count} unverifiable citation(s) after {Max} attempts: {Titles}",
+                    bad.Count, MaxDescriptionAttempts, string.Join(" | ", bad));
+                description = SourceVerifier.ApplyCorrections(description, checks);
+                break;
+            }
+
+            logger.LogWarning(
+                "{Count} citation(s) could not be found — asking for replacements: {Titles}",
+                bad.Count, string.Join(" | ", bad));
+            rejected.AddRange(bad);
+        }
+
+        var previous = script.Description?.Length ?? 0;
+        script.Description = description;
+        runs.SaveScript(run, script);
+
+        // The manifest carries what actually gets uploaded, and it may already hold a music credit
+        // appended at assembly time — so rewrite it from the new text and let the video stage
+        // re-append the credit on the next assembly.
+        runs.UpdateManifest(run, m => m.Publish.Description = description);
+
+        logger.LogInformation(
+            "Description rewritten: {Before} → {After} characters.", previous, description.Length);
     }
 
     private async Task GenerateThumbnailInternal(Run run, Channel channel, ScriptDocument script, CancellationToken ct)
@@ -511,6 +712,23 @@ public sealed class Pipeline(
         if (paths.Count == 0)
             throw new FileNotFoundException(
                 $"No images found in {run.ImagesDir} — run the images stage first.");
+        var beatIndices = paths.Select(ImageSet.BeatIndexOf).ToList();
+        var required = script.Beats.Select(b => b.Index).ToHashSet();
+        var present = beatIndices.Where(i => i.HasValue).Select(i => i!.Value).ToHashSet();
+        if (beatIndices.Any(i => i is null || !required.Contains(i.Value)) || !required.SetEquals(present))
+            throw new InvalidOperationException("The image set does not cover the current script. Regenerate the missing or outdated beat images before rendering.");
         return paths;
+    }
+
+    private static void RequireCurrentVoiceAlignment(Run run, ScriptDocument script)
+    {
+        if (!File.Exists(run.AlignmentPath)) return; // legacy/unaligned TTS still uses estimated timing
+        var alignment = Json.ReadFile<AudioAlignment>(run.AlignmentPath);
+        var spoken = script.NarrationForVoice();
+        if (!string.Equals(alignment.Text, spoken, StringComparison.Ordinal)
+            || alignment.CharStartTimes.Count != spoken.Length)
+            throw new InvalidOperationException(
+                "The saved voice alignment does not match the current narration. Regenerate the voice " +
+                "before rendering; timing from an older script cannot be reused.");
     }
 }

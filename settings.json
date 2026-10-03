@@ -1,7 +1,11 @@
 {
-  "imageProvider": "gflow",
-  "imageFallbackProvider": "codex",
-  "thumbnailProvider": "codex",
+  "imageProvider": "codex",
+  "imageFallbackProvider": "",
+  "thumbnailProvider": "",
+  "codexModel": "gpt-6-sol",
+  "codexReasoningEffort": "high",
+  "quotaCooldownMinutes": 60,
+  "defaultWordsPerMinute": 215.0,
   "gflow": {
     "executable": "D:\\Tools\\uv\\bin\\flow.exe",
     "argsTemplate": [
@@ -20,5 +24,8 @@
   },
   "voiceGain": 1.25,
   "musicEnabled": true,
-  "musicVolume": 0.15
+  "musicVolume": 0.15,
+  "driveArchiveFolder": "G:\\My Drive\\YtPipeline",
+  "rcloneRemote": "gdrive:YtPipeline",
+  "rcloneExecutable": "C:\\Users\\M4tth3w\\AppData\\Local\\Microsoft\\WinGet\\Links\\rclone.exe"
 }

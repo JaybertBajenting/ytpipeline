@@ -58,9 +58,10 @@ public sealed class FfmpegVideoAssembler(
         var listPath = Path.Combine(run.VideoDir, "concat.txt");
         WriteConcatList(listPath, images, durations);
 
+        // No fps filter here — the frame rate is set on the output instead (see -fps_mode below).
         var vf = $"scale={options.Width}:{options.Height}:force_original_aspect_ratio=decrease," +
                  $"pad={options.Width}:{options.Height}:(ow-iw)/2:(oh-ih)/2:color=black," +
-                 $"setsar=1,fps={options.Fps}";
+                 "setsar=1";
 
         // Filter to tracks that actually exist on disk (defensive — selector already checks).
         var tracks = (musicPaths ?? []).Where(p => !string.IsNullOrWhiteSpace(p) && File.Exists(p)).ToList();
@@ -125,7 +126,7 @@ public sealed class FfmpegVideoAssembler(
             mf.Append($"[1:a]volume={voiceVol},aformat=channel_layouts=stereo[voc];");
             // normalize=0 keeps each stream at its own volume instead of dividing by the
             // number of inputs (the default normalize=1 would halve the voice to 50%).
-            mf.Append("[voc][bgm]amix=inputs=2:duration=first:dropout_transition=2:normalize=0[aout]");
+            mf.Append($"[voc][bgm]amix=inputs=2:duration=first:dropout_transition=2:normalize=0,{OutputLimiter}[aout]");
 
             args.AddRange(["-filter_complex", mf.ToString(), "-map", "0:v", "-map", "[aout]"]);
         }
@@ -133,9 +134,13 @@ public sealed class FfmpegVideoAssembler(
         {
             // No music — still boost the voice to the desired level.
             var voiceVol = options.VoiceGain.ToString("0.###", CultureInfo.InvariantCulture);
-            args.AddRange(["-af", $"volume={voiceVol}"]);
+            args.AddRange(["-af", $"volume={voiceVol},{OutputLimiter}"]);
         }
 
+        // Constant frame rate is applied at the output, not with an fps filter. Frames differ by a pixel
+        // or two, each size change rebuilds the filter graph, and the rebuild threw away the picture the
+        // fps filter was holding — so every picture before a size change silently never reached the video.
+        args.AddRange(["-fps_mode", "cfr", "-r", options.Fps.ToString(CultureInfo.InvariantCulture)]);
         args.AddRange(["-c:v", "libx264", "-preset", options.Preset, "-crf", options.Crf.ToString()]);
         args.AddRange(["-pix_fmt", "yuv420p"]);
         args.AddRange(["-c:a", "aac", "-b:a", "192k"]);
@@ -147,9 +152,42 @@ public sealed class FfmpegVideoAssembler(
         if (!File.Exists(run.VideoPath))
             throw new InvalidOperationException($"FFmpeg reported success but no file at {run.VideoPath}.");
 
+        await VerifyFrameCountAsync(run.VideoPath, audioSeconds, ct);
+
         logger.LogInformation("Video -> {Path} ({Seconds:F1}s)", run.VideoPath, audioSeconds);
         return run.VideoPath;
     }
+
+    /// <summary>
+    /// Counts the frames FFmpeg actually wrote. A picture that never reaches the encoder leaves no error
+    /// behind — only a video short of frames — so the shortfall has to fail the stage here or it ships.
+    /// </summary>
+    private async Task VerifyFrameCountAsync(string videoPath, double audioSeconds, CancellationToken ct)
+    {
+        var probe = await process.RunOrThrowAsync(options.Executable,
+            ["-hide_banner", "-i", videoPath, "-map", "0:v:0", "-c", "copy", "-f", "null", "-"], ct: ct);
+        var last = System.Text.RegularExpressions.Regex.Matches(probe.StdErr, @"frame=\s*(\d+)").LastOrDefault();
+        if (last is null)
+        {
+            logger.LogWarning("Could not read the frame count of {Path}; skipping the missing-picture check.", videoPath);
+            return;
+        }
+
+        var frames = int.Parse(last.Groups[1].Value, CultureInfo.InvariantCulture);
+        var expected = audioSeconds * options.Fps;
+        // One second of slack covers -shortest and AAC priming; a single dropped picture costs several.
+        if (frames < expected - options.Fps)
+            throw new InvalidOperationException(
+                $"{videoPath} has {frames} frames, but {audioSeconds:F1}s at {options.Fps}fps needs about " +
+                $"{expected:F0} — {(expected - frames) / options.Fps:F1}s of pictures never made it into the video.");
+
+        logger.LogInformation("Video has {Frames} frames ({Expected:F0} expected).", frames, expected);
+    }
+
+    // Reserve 2 dB of headroom for AAC encoding after voice gain and music summing.
+    // level=false disables the limiter's default automatic boost back to 0 dBFS;
+    // latency=true compensates its lookahead so speech/image alignment does not move.
+    internal const string OutputLimiter = "alimiter=limit=0.794328:level=false:latency=true";
 
     /// <summary>
     /// Per-image hold times anchored to the actual spoken audio, using ElevenLabs' per-character

@@ -9,7 +9,8 @@ namespace YtPipeline.Core.Services;
 /// window tied to first use, so any hardcoded schedule would be wrong for half the week. Instead
 /// the provider is benched for a cooldown, then simply tried again — the next run discovers the
 /// truth. Repeated failures back the cooldown off so a long outage doesn't mean hourly retries
-/// forever.
+/// forever. A provider that STATES its reset (Codex's 429 carries "resets_at") is benched until
+/// exactly then instead — that is its own answer, not a prediction.
 /// </para>
 /// </summary>
 public sealed class ProviderHealthStore
@@ -27,6 +28,8 @@ public sealed class ProviderHealthStore
         "quota exceeded",
         "insufficient_quota",
         "rate limit exceeded",
+        // Codex's image tool: http 429 {"type":"usage_limit_reached", ..., "resets_at":…}
+        "usage_limit_reached",
     ];
 
     public ProviderHealthStore(string workspaceRoot)
@@ -55,20 +58,22 @@ public sealed class ProviderHealthStore
     /// restarted continuously and could never expire. Reports arriving while the provider is
     /// already benched are therefore folded into the existing episode.
     /// </remarks>
-    public bool MarkExhausted(string provider, string error, int baseCooldownMinutes)
+    /// <param name="resetsUtc">
+    /// When the provider says the limit resets, if it says. Benches until exactly then instead of
+    /// guessing with the cooldown — no point retrying Codex an hour later when it named 9:00 tomorrow.
+    /// </param>
+    public bool MarkExhausted(string provider, string error, int baseCooldownMinutes, DateTime? resetsUtc = null)
     {
         lock (_gate)
         {
             var s = State(provider);
             var now = DateTime.UtcNow;
 
-            var stillBenched = s.ExhaustedUtc is { } at
-                && at + Cooldown(baseCooldownMinutes, s.ConsecutiveProbeFailures) > now;
-
-            if (stillBenched)
+            if (Until(s, baseCooldownMinutes) is { } until && until > now)
             {
                 // Same episode: keep the original timestamp so the cooldown actually elapses.
                 s.LastError = Trim(error);
+                if (resetsUtc is { } r) s.ResetsUtc = r;
                 Persist();
                 return false;
             }
@@ -77,11 +82,17 @@ public sealed class ProviderHealthStore
             // still out — the latter is what the backoff ladder is counting.
             s.ConsecutiveProbeFailures = s.ExhaustedUtc is null ? 0 : s.ConsecutiveProbeFailures + 1;
             s.ExhaustedUtc = now;
+            s.ResetsUtc = resetsUtc;
             s.LastError = Trim(error);
             Persist();
             return true;
         }
     }
+
+    /// <summary>The provider's own reset time when it gave one, otherwise the cooldown's end.</summary>
+    private static DateTime? Until(ProviderQuotaState s, int baseCooldownMinutes) =>
+        s.ExhaustedUtc is not { } at ? null
+        : s.ResetsUtc ?? at + Cooldown(baseCooldownMinutes, s.ConsecutiveProbeFailures);
 
     /// <summary>Forgets a provider's benching entirely — used to undo a bad state by hand.</summary>
     public void Reset(string provider)
@@ -99,6 +110,7 @@ public sealed class ProviderHealthStore
         {
             if (!_current.Providers.TryGetValue(provider, out var s) || s.ExhaustedUtc is null) return;
             s.ExhaustedUtc = null;
+            s.ResetsUtc = null;
             s.LastError = "";
             s.ConsecutiveProbeFailures = 0;
             Persist();
@@ -120,11 +132,8 @@ public sealed class ProviderHealthStore
     {
         lock (_gate)
         {
-            if (!_current.Providers.TryGetValue(provider, out var s) || s.ExhaustedUtc is null)
-                return null;
-
-            var until = s.ExhaustedUtc.Value + Cooldown(baseCooldownMinutes, s.ConsecutiveProbeFailures);
-            return until > DateTime.UtcNow ? until : null;
+            if (!_current.Providers.TryGetValue(provider, out var s)) return null;
+            return Until(s, baseCooldownMinutes) is { } until && until > DateTime.UtcNow ? until : null;
         }
     }
 
@@ -137,6 +146,7 @@ public sealed class ProviderHealthStore
                     ExhaustedUtc = s.ExhaustedUtc,
                     LastError = s.LastError,
                     ConsecutiveProbeFailures = s.ConsecutiveProbeFailures,
+                    ResetsUtc = s.ResetsUtc,
                 }
                 : new ProviderQuotaState();
     }

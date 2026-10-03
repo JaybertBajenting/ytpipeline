@@ -7,6 +7,7 @@ bin/
 obj/
 web/node_modules/
 web/dist/
+*.tsbuildinfo
 
 # Published double-clickable app (regenerate with publish-app.cmd)
 app/
@@ -34,6 +35,11 @@ logs/
 # Reference material downloaded for format study (third-party audio and transcripts).
 # Local analysis only — must never be redistributed via the repo.
 _research/
+
+# Same rule for the source channel's own frames and thumbnails that a channel's referenceStudy
+# attaches to image generation (channels/<id>.references/). The channel json points at them, so
+# a fresh clone has to restore this folder before that channel can generate.
+channels/*.references/
 
 # IDE
 .vs/

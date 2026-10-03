@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 // lucide dropped brand marks, so each platform gets the closest generic glyph.
 import {
-  Camera, Image as ImageIcon, MonitorPlay, Music, Plug, RotateCcw, Save, SlidersHorizontal,
+  Camera, Cloud, Image as ImageIcon, MonitorPlay, Music, Plug, RotateCcw, Save, SlidersHorizontal,
   TerminalSquare, ThumbsUp, Tv, Volume2,
 } from "lucide-react";
 import type { AppSettings, SecretsUpdate, SecretsView } from "@/lib/api";
@@ -10,6 +10,7 @@ import {
   useSecrets, useSettings,
 } from "@/lib/hooks";
 import { useUi } from "@/lib/store";
+import { BUILT_IN_VOICE_MODEL, voiceModelLabel, voiceModelOptions } from "@/lib/voiceModels";
 import { PublishingGuide } from "@/components/PublishingGuide";
 import {
   Badge, Button, Callout, Card, CardHead, Field, Input, PageHead, SectionLabel, SecretInput,
@@ -28,11 +29,13 @@ export function SettingsPage() {
           <TabTrigger id="general" icon={<SlidersHorizontal className="size-3.5" />}>Audio</TabTrigger>
           <TabTrigger id="images" icon={<ImageIcon className="size-3.5" />}>Images</TabTrigger>
           <TabTrigger id="publishing" icon={<Plug className="size-3.5" />}>Publishing</TabTrigger>
+          <TabTrigger id="storage" icon={<Cloud className="size-3.5" />}>Storage</TabTrigger>
         </TabList>
 
         <TabPanel id="general"><PipelineSettings section="audio" /></TabPanel>
         <TabPanel id="images"><PipelineSettings section="images" /></TabPanel>
         <TabPanel id="publishing"><PublishingSettings /></TabPanel>
+        <TabPanel id="storage"><PipelineSettings section="storage" /></TabPanel>
       </Tabs>
     </>
   );
@@ -40,8 +43,9 @@ export function SettingsPage() {
 
 // ─── settings.json (audio + images) ──────────────────────────────────────────
 
-function PipelineSettings({ section }: { section: "audio" | "images" }) {
+function PipelineSettings({ section }: { section: "audio" | "images" | "storage" }) {
   const { data: server, isLoading } = useSettings();
+  const { data: channels } = useChannels();
   const save = useSaveSettings();
   const check = useCheckGflow();
   const [draft, setDraft] = useState<AppSettings | null>(null);
@@ -81,13 +85,79 @@ function PipelineSettings({ section }: { section: "audio" | "images" }) {
     </div>
   );
 
+  if (section === "storage") {
+    return (
+      <>
+        <Card>
+          <CardHead
+            title="Google Drive"
+            desc="Where Move to Google Drive puts a video's files."
+            icon={<Cloud className="size-3.5" />}
+          />
+          <div className="space-y-3.5 p-4">
+            <Input
+              label="rclone remote"
+              className="font-mono text-xs"
+              placeholder="gdrive:YtPipeline"
+              value={draft.rcloneRemote}
+              onChange={(e) => set("rcloneRemote", e.target.value)}
+              hint="Uploads straight to Google Drive, checks every file, then frees the space on this PC at once. Leave empty to copy into the folder below instead."
+            />
+            <Input
+              label="rclone program"
+              className="font-mono text-xs"
+              value={draft.rcloneExecutable}
+              onChange={(e) => set("rcloneExecutable", e.target.value)}
+              hint="Full path is safest — the app may have started before rclone was installed."
+            />
+            <Input
+              label="Google Drive folder on this PC"
+              className="font-mono text-xs"
+              placeholder="G:\My Drive\YtPipeline"
+              value={draft.driveArchiveFolder}
+              onChange={(e) => set("driveArchiveFolder", e.target.value)}
+              hint="Where the same files show in File Explorer, for Open in Google Drive. With no rclone remote, videos are copied here instead — but the Drive app then keeps a cached copy on this PC."
+            />
+          </div>
+        </Card>
+        {SaveBar}
+        <Toast show={toast}>Settings saved.</Toast>
+      </>
+    );
+  }
+
   if (section === "audio") {
+    // Channels that name their own model ignore the default below, so say which ones do.
+    const pinned = (channels ?? []).filter((c) => c.voice?.modelId);
     return (
       <>
         <div className="grid gap-5 lg:grid-cols-2">
           <Card>
-            <CardHead title="Voice" desc="Applied when the final video is muxed." icon={<Volume2 className="size-3.5" />} />
-            <div className="p-4">
+            <CardHead title="Voice" desc="The ElevenLabs model, and how loud the voice sits in the final mix." icon={<Volume2 className="size-3.5" />} />
+            <div className="space-y-4 p-4">
+              <Select
+                label="Default voice model"
+                value={draft.elevenLabsModel}
+                onChange={(e) => set("elevenLabsModel", e.target.value)}
+                hint="For channels that don't pick their own model. Any video can still try a different one from its Voiceover step."
+              >
+                <option value="">Built-in — {voiceModelLabel(BUILT_IN_VOICE_MODEL)}</option>
+                {voiceModelOptions(draft.elevenLabsModel).map((m) => (
+                  <option key={m.id} value={m.id}>{m.label} — {m.note}</option>
+                ))}
+              </Select>
+              {pinned.length > 0 && (
+                <p className="text-[11px] leading-relaxed text-white/40">
+                  Keeping their own model:{" "}
+                  {pinned.map((c, i) => (
+                    <span key={c.id}>
+                      {i > 0 && ", "}
+                      <span className="text-white/60">{c.name}</span> ({voiceModelLabel(c.voice.modelId)})
+                    </span>
+                  ))}
+                  . Set a channel to <em>Settings default</em> on the Channels page to have it follow this.
+                </p>
+              )}
               <Slider
                 label="Voice gain" min={0.1} max={4} step={0.05}
                 value={draft.voiceGain}
@@ -127,6 +197,17 @@ function PipelineSettings({ section }: { section: "audio" | "images" }) {
 
   // ── Images ────────────────────────────────────────────────────────────────
   const isGflow = draft.imageProvider === "gflow";
+  const isLegacyCodex = draft.codexModel === "gpt-5.5";
+  const supportsUltra = !isLegacyCodex && draft.codexModel !== "gpt-6-luna"
+    && draft.codexModel !== "gpt-5.6-luna";
+
+  const setCodexModel = (model: AppSettings["codexModel"]) => setDraft((current) => {
+    if (!current) return current;
+    let effort = current.codexReasoningEffort;
+    if (model === "gpt-5.5" && (effort === "max" || effort === "ultra")) effort = "xhigh";
+    else if ((model === "gpt-6-luna" || model === "gpt-5.6-luna") && effort === "ultra") effort = "max";
+    return { ...current, codexModel: model, codexReasoningEffort: effort };
+  });
 
   return (
     <>
@@ -147,6 +228,36 @@ function PipelineSettings({ section }: { section: "audio" | "images" }) {
                 title="gflow / Google Flow"
                 desc="One image per call through a headed Chrome window. Spends Google AI Pro credits."
               />
+            </div>
+            <div className="grid gap-3 border-t border-white/[0.06] pt-4 sm:grid-cols-2">
+              <Select
+                label="Codex model"
+                hint="Coordinates frames, thumbnails, and channel art when Codex is used. GPT-6.1 Sol needs Codex 0.159 or newer."
+                value={draft.codexModel}
+                onChange={(e) => setCodexModel(e.target.value as AppSettings["codexModel"])}
+              >
+                <option value="gpt-6.1-sol">GPT-6.1 Sol — newest</option>
+                <option value="gpt-6-astra">GPT-6 Astra</option>
+                <option value="gpt-6-sol">GPT-6 Sol</option>
+                <option value="gpt-6-luna">GPT-6 Luna</option>
+                <option value="gpt-5.6-sol">GPT-5.6 Sol</option>
+                <option value="gpt-5.6-terra">GPT-5.6 Terra</option>
+                <option value="gpt-5.6-luna">GPT-5.6 Luna</option>
+                <option value="gpt-5.5">GPT-5.5</option>
+              </Select>
+              <Select
+                label="Reasoning effort"
+                hint="Applies to the Codex coordinator, not the underlying image model."
+                value={draft.codexReasoningEffort}
+                onChange={(e) => set("codexReasoningEffort", e.target.value as AppSettings["codexReasoningEffort"])}
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="xhigh">Extra high</option>
+                {!isLegacyCodex && <option value="max">Max</option>}
+                {supportsUltra && <option value="ultra">Ultra</option>}
+              </Select>
             </div>
             {isGflow && (
               <Callout tone="warn" title="Needs a signed-in browser">
@@ -226,9 +337,22 @@ function PipelineSettings({ section }: { section: "audio" | "images" }) {
               }
             />
             <div className="space-y-3.5 p-4">
+              {/* Three states, not two. "The CLI runs" and "the CLI can generate" are different
+                  questions: `flow status` exits 0 while reporting a disconnected extension, so
+                  showing only the exit code said "Reachable" during a run in which every beat
+                  failed on a Chrome permission error. */}
               {check.data && (
-                <Callout tone={check.data.installed ? "info" : "err"}
-                         title={check.data.installed ? "Reachable" : "Not reachable"}>
+                <Callout
+                  tone={!check.data.installed ? "err" : check.data.connected ? "info" : "warn"}
+                  title={
+                    !check.data.installed ? "Not reachable"
+                    : check.data.connected ? "Ready"
+                    : `Reachable, but can't generate (${check.data.state})`
+                  }
+                >
+                  {check.data.remedy && (
+                    <p className="mb-1.5 leading-relaxed">{check.data.remedy}</p>
+                  )}
                   <pre className="m-0 max-h-24 overflow-auto whitespace-pre-wrap font-mono text-[10px]">
                     {check.data.installed ? check.data.version : check.data.error}
                   </pre>

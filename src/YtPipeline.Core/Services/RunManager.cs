@@ -113,8 +113,89 @@ public sealed class RunManager
         return manifest;
     }
 
-    public void SaveScript(Run run, ScriptDocument script) =>
+    public void SaveScript(Run run, ScriptDocument script)
+    {
+        var old = File.Exists(run.ScriptPath) ? LoadScript(run) : null;
+        var narrationChanged = old is not null && old.NarrationForVoice() != script.NarrationForVoice();
+        var storyboardChanged = old is not null && !old.Beats.Select(b => (b.Index, b.Narration, b.ImagePrompt))
+            .SequenceEqual(script.Beats.Select(b => (b.Index, b.Narration, b.ImagePrompt)));
+        // Invalidate first. If either write fails, completed flags must never describe assets for
+        // a newer script that reached disk before its invalidation was persisted.
+        if (narrationChanged || storyboardChanged) UpdateManifest(run, m =>
+        {
+            if (narrationChanged)
+            {
+                m.Stages.Voice.Done = false;
+                m.Stages.Voice.CompletedUtc = null;
+            }
+            if (storyboardChanged)
+            {
+                m.Stages.Images.Done = false;
+                m.Stages.Images.CompletedUtc = null;
+                m.Stages.Images.Set("needsRegeneration", true);
+            }
+            m.Stages.Video.Done = false;
+            m.Stages.Video.CompletedUtc = null;
+            m.Review.ScriptApproved = false;
+            m.Review.VideoApproved = false;
+        });
         Json.WriteFile(run.ScriptPath, script);
+    }
+
+    /// <summary>
+    /// Starts or resumes image generation. Old images are moved out of the active folder before
+    /// regeneration is cleared, so a failing provider cannot make the next attempt reuse them.
+    /// </summary>
+    public string? PrepareImageGeneration(Run run, bool regenerate = false)
+    {
+        var imageDir = CheckedRunChildPath(run, run.ImagesDir);
+        var manifest = UpdateManifest(run, m =>
+        {
+            m.Stages.Images.Done = false;
+            m.Stages.Images.CompletedUtc = null;
+            if (regenerate) m.Stages.Images.Set("needsRegeneration", true);
+            m.Stages.Video.Done = false;
+            m.Stages.Video.CompletedUtc = null;
+            m.Review.VideoApproved = false;
+        });
+        if (!manifest.Stages.Images.Get<bool>("needsRegeneration")) return null;
+
+        string? archive = null;
+        if (Directory.Exists(imageDir))
+        {
+            // Move the directory intact: drafts and sidecars also survive. A failed move throws
+            // with needsRegeneration still set. Each target is checked before this recursive move.
+            archive = CheckedRunChildPath(run, Path.Combine(run.OutputDir, "superseded", "images",
+                DateTime.UtcNow.ToString("yyyyMMdd_HHmmss_fff") + "_" + Guid.NewGuid().ToString("N")));
+            Directory.CreateDirectory(Path.GetDirectoryName(archive)!);
+            Directory.Move(imageDir, archive);
+        }
+        Directory.CreateDirectory(imageDir);
+        UpdateManifest(run, m =>
+        {
+            m.Stages.Images.Clear("needsRegeneration");
+            if (archive is not null)
+            {
+                var previous = m.Stages.Images.Get<List<string>>("supersededDirs") ?? [];
+                previous.Add(archive);
+                m.Stages.Images.Set("supersededDirs", previous);
+            }
+        });
+        return archive;
+    }
+
+    private string CheckedRunChildPath(Run run, string path)
+    {
+        var videos = Path.GetFullPath(VideosRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                     + Path.DirectorySeparatorChar;
+        var output = Path.GetFullPath(run.OutputDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                     + Path.DirectorySeparatorChar;
+        var candidate = Path.GetFullPath(path);
+        if (!output.StartsWith(videos, StringComparison.OrdinalIgnoreCase)
+            || !candidate.StartsWith(output, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Refusing to move image assets outside this run: {candidate}");
+        return candidate;
+    }
 
     public ScriptDocument LoadScript(Run run) =>
         Json.ReadFile<ScriptDocument>(run.ScriptPath);
@@ -130,11 +211,14 @@ public sealed class RunManager
         WorkspaceRoot = _workspaceRoot,
     };
 
-    /// <summary>All manifest.json files across every channel's runs.</summary>
+    /// <summary>Active run manifests, excluding snapshots preserved below a run's folder.</summary>
     private IEnumerable<string> EnumerateManifests()
     {
         if (!Directory.Exists(VideosRoot)) return Enumerable.Empty<string>();
-        return Directory.EnumerateFiles(VideosRoot, "manifest.json", SearchOption.AllDirectories);
+        return Directory.EnumerateDirectories(VideosRoot)
+            .SelectMany(channel => Directory.EnumerateDirectories(channel))
+            .Select(run => Path.Combine(run, "manifest.json"))
+            .Where(File.Exists);
     }
 
     private string? LatestManifestPath() =>

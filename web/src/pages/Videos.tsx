@@ -2,13 +2,12 @@ import { useMemo, useState } from "react";
 import { Film, Plus, Search } from "lucide-react";
 import { stagesDone, type Manifest } from "@/lib/api";
 import { useChannels, useRuns } from "@/lib/hooks";
-import { useUi } from "@/lib/store";
+import { useUi, type VideoStatusFilter as Filter } from "@/lib/store";
 import { VideoCard } from "@/components/VideoCard";
 import { RunDetail } from "@/components/RunDetail";
 import { DeleteVideoDialog } from "@/components/DeleteVideoDialog";
+import { MoveToDriveDialog } from "@/components/MoveToDriveDialog";
 import { Button, EmptyState, Input, PageHead, Select, Skeleton } from "@/components/ui";
-
-type Filter = "all" | "in-progress" | "ready" | "uploaded";
 
 export function Videos() {
   const selectedRunId = useUi((s) => s.selectedRunId);
@@ -16,10 +15,23 @@ export function Videos() {
   const { data: runs, isLoading } = useRuns();
   const { data: channels } = useChannels();
 
-  const [q, setQ] = useState("");
-  const [channel, setChannel] = useState("all");
-  const [filter, setFilter] = useState<Filter>("all");
+  // Filters live in the UI store, not local state: this page unmounts whenever another sidebar
+  // destination opens, and local state was thrown away with it.
+  const q = useUi((s) => s.videoQuery);
+  const setQ = useUi((s) => s.setVideoQuery);
+  const savedChannel = useUi((s) => s.videoChannel);
+  const setChannel = useUi((s) => s.setVideoChannel);
+  const filter = useUi((s) => s.videoStatus);
+  const setFilter = useUi((s) => s.setVideoStatus);
   const [deleting, setDeleting] = useState<Manifest | null>(null);
+  const [moving, setMoving] = useState<Manifest | null>(null);
+
+  // A remembered channel can outlive the channel. Trust it until the list loads, so a reload
+  // doesn't flash every video first; after that, a deleted channel falls back to "all" instead
+  // of an empty grid behind a select that can't display what it's filtering on.
+  const channel = savedChannel !== "all" && channels && !channels.some((c) => c.id === savedChannel)
+    ? "all"
+    : savedChannel;
 
   const shown = useMemo(() => {
     let list = runs ?? [];
@@ -109,7 +121,7 @@ export function Videos() {
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-4">
           {shown.map((m: Manifest, i) => (
-            <VideoCard key={m.runId} m={m} index={i} onDelete={setDeleting} />
+            <VideoCard key={m.runId} m={m} index={i} onDelete={setDeleting} onMoveToDrive={setMoving} />
           ))}
         </div>
       )}
@@ -121,6 +133,7 @@ export function Videos() {
       )}
 
       <DeleteVideoDialog target={deleting} onClose={() => setDeleting(null)} />
+      <MoveToDriveDialog target={moving} onClose={() => setMoving(null)} />
     </>
   );
 }

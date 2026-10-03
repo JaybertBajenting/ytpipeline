@@ -21,12 +21,17 @@ public sealed class ProcessException(string fileName, ProcessResult result)
 /// </summary>
 public sealed class ProcessRunner(ILogger<ProcessRunner> logger)
 {
+    /// <param name="onLine">
+    /// Called with each stdout/stderr line as it arrives, for tools whose progress is worth showing
+    /// while they run (an upload). The full output is still returned at the end either way.
+    /// </param>
     public async Task<ProcessResult> RunAsync(
         string fileName,
         IEnumerable<string> args,
         string? workingDirectory = null,
         string? stdin = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        Action<string>? onLine = null)
     {
         var psi = new ProcessStartInfo
         {
@@ -51,8 +56,18 @@ public sealed class ProcessRunner(ILogger<ProcessRunner> logger)
         var stdout = new StringBuilder();
         var stderr = new StringBuilder();
 
-        proc.OutputDataReceived += (_, e) => { if (e.Data is not null) stdout.AppendLine(e.Data); };
-        proc.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderr.AppendLine(e.Data); };
+        proc.OutputDataReceived += (_, e) =>
+        {
+            if (e.Data is null) return;
+            stdout.AppendLine(e.Data);
+            onLine?.Invoke(e.Data);
+        };
+        proc.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data is null) return;
+            stderr.AppendLine(e.Data);
+            onLine?.Invoke(e.Data);
+        };
 
         try
         {

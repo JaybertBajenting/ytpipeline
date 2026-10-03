@@ -34,6 +34,12 @@ public sealed class AppSettings
     /// </summary>
     public string ThumbnailProvider { get; set; } = "";
 
+    /// <summary>Codex agent that coordinates frame, thumbnail, and brand image generation.</summary>
+    public string CodexModel { get; set; } = "gpt-6-astra";
+
+    /// <summary>Reasoning effort for the Codex image-generation agent.</summary>
+    public string CodexReasoningEffort { get; set; } = "low";
+
     /// <summary>
     /// How long a provider stays benched after reporting its quota exhausted, before the next run
     /// tries it again. Doubles on each retry that finds it still out, capped at 8 hours. Kept
@@ -52,6 +58,13 @@ public sealed class AppSettings
 
     public GflowSettings Gflow { get; set; } = new();
 
+    /// <summary>
+    /// ElevenLabs model for channels that don't pick their own, e.g. <c>eleven_v4</c>. Empty keeps
+    /// the <c>ElevenLabs:ModelId</c> from appsettings.json. A channel's own model wins over this,
+    /// and a model picked for one video wins over both.
+    /// </summary>
+    public string ElevenLabsModel { get; set; } = "";
+
     /// <summary>Linear gain on the ElevenLabs voice in the final mix (1.25 = +25%).</summary>
     public double VoiceGain { get; set; } = 1.25;
 
@@ -60,6 +73,41 @@ public sealed class AppSettings
 
     /// <summary>Background music level relative to the voice.</summary>
     public double MusicVolume { get; set; } = 0.15;
+
+    /// <summary>
+    /// Folder inside Google Drive for desktop that finished videos are moved into, e.g.
+    /// <c>G:\My Drive\YtPipeline</c>; Drive uploads whatever lands there. Empty turns the
+    /// "Move to Google Drive" button off.
+    /// </summary>
+    public string DriveArchiveFolder { get; set; } = "";
+
+    /// <summary>
+    /// rclone destination for "Move to Google Drive", e.g. <c>gdrive:YtPipeline</c>. When set, videos are
+    /// uploaded straight to Google instead of copied into <see cref="DriveArchiveFolder"/>, whose Drive
+    /// app keeps a local cache copy — so the space only comes back this way. Empty = folder copy.
+    /// </summary>
+    public string RcloneRemote { get; set; } = "";
+
+    /// <summary>rclone program: a full path, or a name resolved on PATH.</summary>
+    public string RcloneExecutable { get; set; } = "rclone";
+}
+
+/// <summary>Checks ElevenLabs model ids that arrive from the UI.</summary>
+public static class VoiceModelIds
+{
+    /// <summary>
+    /// The id trimmed and lower-cased, or "" when it can't be a model id. Deliberately not a fixed
+    /// list: ElevenLabs ships models (eleven_v4 arrived after this pipeline was written), and a new
+    /// one should work without a code change. Their ids are all lower-case letters, digits and
+    /// underscores.
+    /// </summary>
+    public static string Clean(string? id)
+    {
+        var s = id?.Trim().ToLowerInvariant() ?? "";
+        return s.Length is > 0 and <= 64 && s.All(c => c is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '_')
+            ? s
+            : "";
+    }
 }
 
 /// <summary>Known <see cref="AppSettings.ImageProvider"/> values.</summary>

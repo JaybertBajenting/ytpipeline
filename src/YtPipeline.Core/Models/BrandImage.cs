@@ -32,5 +32,19 @@ public static class BrandImage
     public static string Aspect(string kind) => Normalize(kind) == Avatar ? "square" : "landscape";
 
     /// <summary>The pixel size YouTube wants uploaded — stated in the UI and aimed at in the prompt.</summary>
-    public static string SizeLabel(string kind) => Normalize(kind) == Avatar ? "800x800" : "2048x1152";
+    public static string SizeLabel(string kind) => Normalize(kind) == Avatar ? "800x800" : "2560x1440";
+
+    /// <summary>
+    /// The only part of a banner every viewer sees: 1546x423 centred in the 2560x1440 upload.
+    /// <para>
+    /// Everything outside it is a bonus shown on desktop and TV. This was measured, not assumed —
+    /// YouTube's own served crop of a reference channel's banner comes back at 2560x424, and that
+    /// channel's artwork puts its headline squarely inside these bounds.
+    /// </para>
+    /// </summary>
+    public const int BannerWidth = 2560, BannerHeight = 1440, SafeWidth = 1546, SafeHeight = 423;
+
+    /// <summary>Safe area as a fraction of the full banner — 60.4% of the width, 29.4% of the height.</summary>
+    public static (double W, double H) SafeFraction =>
+        ((double)SafeWidth / BannerWidth, (double)SafeHeight / BannerHeight);
 }
