@@ -1,0 +1,144 @@
+{
+  "name": "Barely An Expert",
+  "tagline": "Ten things a week that turned out to be stranger than expected",
+  "persona": "A calm, clear explainer who develops ten related items in a countdown using concrete observations, people and mechanisms. Mostly third-person explanatory narration, with natural curiosity and restrained reactions. Say what the evidence supports, distinguish inference from measurement, and describe uncertainty precisely. Study the actual Some Guy Who Knows Stuff source transcripts and frame images before writing or drawing; make original content for Barely An Expert.",
+  "audience": "Curious viewers who enjoy an accessible, measured countdown about science, history and unfamiliar facts. They should be able to follow the explanation and its evidence without specialist knowledge.",
+  "tone": "Measured, conversational and quietly curious, with interest carried by concrete facts and clear explanations. Natural sentence variation and occasional explanatory questions are welcome.",
+  "videoLengthTargetMinutes": 16,
+  "videoLengthMinMinutes": 16,
+  "videoLengthMaxMinutes": 19,
+  "scriptVoiceRules": "MANDATORY SOURCE STUDY: read the actual five transcripts in referenceStudy.transcriptPaths before drafting. They are presentation references, not scientific authorities. Raw evidence outranks old notes and generic templates. Read channels/barely-an-expert.reference.md for the source contract. Write original prose, predominantly in third person, with natural inclusive language where useful. Explanatory questions are allowed when they introduce a real question; avoid repeated rhetorical hooks. Use varied complete sentences averaging roughly 13-16 words across the whole script, including longer 20-30 word explanations and shorter statements. This is a guide, not a sentence cap. A visual beat is not a sentence: a connected sentence may span two or three beats; split at clauses without inserting full stops or fragments. Concatenated beats must sound like flowing narration. Develop about 2500-2650 spoken words for the 16-19 minute format and verify against final audio. Name relevant people, instruments, places and dates when they help explain the evidence. Verify all important claims against primary sources and keep claim-to-source URLs, dates and uncertainty in the research record. Date changing percentages and use consistent definitions and denominators; distinguish modern high-resolution seafloor coverage, broad inferred bathymetry and direct visual observation. Never invent a dismissed belief, scholarly opposition, mystery or breakthrough to fit a narrative template. A reference-channel assertion is not proof. Each chapter must add a distinct explanation or example, not repeat that a subject remains unknown. Start directly with Number ten and the first chapter's name, using original connective wording if needed. Do not add a long trailer hook. End with a short original thank-you and optional one-line subscription invitation, about 20-35 words total. No long poetic coda, fake historical dialogue, vague substitutes for important names, or repeated conclusion padding. Storyboard each chapter as varied original scenes using the actual reference pixels: people investigating, close-ups, simple settings, diagrams, comparisons and occasional purposeful speech bubbles. Each image prompt specifies framing, action, setting and exact useful text.",
+  "scriptStructure": [
+    "COLD OPEN: Start directly with Number ten and the first chapter name. Establish the concrete subject immediately. Original wording; no long promotional introduction.",
+    "TEN CHAPTERS: Count down from ten to one. Build ten distinct, connected explanations that answer the actual topic. Usually around 240-265 words each, varied when the evidence warrants it. Use a relevant observation, context, named example or mechanism, what the evidence establishes, and a clear practical implication. Do not force every chapter into a myth, opposition or unsolved-question story. Avoid reusing the same fact as several chapters' conclusions.",
+    "VISUAL DEVELOPMENT: Write flowing paragraphs first, then divide at natural clauses for roughly 4.3-second image beats. A sentence can span beats. Alternate meaningful actions and distances: investigation scene, close-up evidence, diagram or comparison and consequence, as the chapter needs. Do not keep returning to generic maps and symbols.",
+    "SHORT OUTRO: Around 20-35 original words thanking viewers and optionally inviting them to subscribe. Close promptly without a repeated summary or poetic ending."
+  ],
+  "scriptTemplates": [
+    {
+      "name": "myths-that-were-real",
+      "lastUsedUtc": "2026-09-03T18:12:47.6389617Z",
+      "sections": [
+        "OPEN: Begin directly with Number ten and the first chapter name, in original wording.",
+        "TEN ITEMS: Use this form only for a topic with independently verified links between reported beliefs and later evidence. Distinguish the real finding from the legend; do not invent universal disbelief, named opposition or vindication. Develop context, evidence, relevant people and the limits of the conclusion.",
+        "PROSE AND BEATS: Follow current ScriptVoiceRules. Develop natural sentences across visual beats and vary shot types using the real frame references. No repetition to meet a word budget.",
+        "OUTRO: A short original thank-you and optional subscription invitation, about 20-35 words. No copied standard sign-off or long coda."
+      ]
+    },
+    {
+      "name": "still-unexplained",
+      "sections": [
+        "OPEN: Begin directly with Number ten and the first chapter name, in original wording.",
+        "TEN ITEMS: State what is actually observed and what remains unresolved. Explain supported competing accounts without inventing a violation of science or claiming every explanation was disproved. Distinguish a question under active research from poor evidence for an extraordinary claim.",
+        "PROSE AND BEATS: Follow current ScriptVoiceRules. Develop natural sentences across visual beats and vary shot types using the real frame references. No repetition to meet a word budget.",
+        "OUTRO: A short original thank-you and optional subscription invitation, about 20-35 words. No copied standard sign-off or long coda."
+      ]
+    },
+    {
+      "name": "biggest-ever",
+      "sections": [
+        "OPEN: Begin directly with Number ten and the first chapter name, in original wording.",
+        "TEN ITEMS: Define the comparison, measurement, date and scope. Explain what each item is, where it is, how it was measured or made, and why the difference matters. Order entries logically; verify changing superlatives.",
+        "PROSE AND BEATS: Follow current ScriptVoiceRules. Develop natural sentences across visual beats and vary shot types using the real frame references. No repetition to meet a word budget.",
+        "OUTRO: A short original thank-you and optional subscription invitation, about 20-35 words. No copied standard sign-off or long coda."
+      ]
+    },
+    {
+      "name": "things-that-went-wrong",
+      "sections": [
+        "OPEN: Begin directly with Number ten and the first chapter name, in original wording.",
+        "TEN ITEMS: Establish the plan, relevant conditions, specific failure and consequences using reliable evidence. Describe people and lessons with restraint. Do not force a villain or invent ignored warnings.",
+        "PROSE AND BEATS: Follow current ScriptVoiceRules. Develop natural sentences across visual beats and vary shot types using the real frame references. No repetition to meet a word budget.",
+        "OUTRO: A short original thank-you and optional subscription invitation, about 20-35 words. No copied standard sign-off or long coda."
+      ]
+    },
+    {
+      "name": "hidden-in-plain-sight",
+      "sections": [
+        "OPEN: Begin directly with Number ten and the first chapter name, in original wording.",
+        "TEN ITEMS: Explain familiar things through verified histories, mechanisms or open questions. Replace assumptions with specific evidence and identify where knowledge stops.",
+        "PROSE AND BEATS: Follow current ScriptVoiceRules. Develop natural sentences across visual beats and vary shot types using the real frame references. No repetition to meet a word budget.",
+        "OUTRO: A short original thank-you and optional subscription invitation, about 20-35 words. No copied standard sign-off or long coda."
+      ]
+    },
+    {
+      "name": "source-grounded-explainer",
+      "lastUsedUtc": "2026-09-13T18:31:28.1683149Z",
+      "sections": [
+        "OPEN: Number ten and the first chapter name, then the concrete explanation; no long introductory hook.",
+        "TEN DISTINCT CHAPTERS: Explain the actual topic in ten connected parts. Establish each observation, use a specific supported case or mechanism, clarify what is known and what remains uncertain, and show why it matters. About 2500-2650 words overall. Do not impose myths, disasters or unanswered questions when the evidence does not call for them.",
+        "SOURCE AND STORYBOARD: Verify facts independently using primary sources; date changing statistics and keep definitions consistent. Study the five source transcripts for connected prose and the frame images for varied scene selection. Break at natural clauses; one sentence may span multiple visual beats. Image prompts specify action, framing, setting and exact optional labels or bubbles.",
+        "OUTRO: Close in about 20-35 original words with a thank-you and optional short subscription invitation."
+      ]
+    }
+  ],
+  "scriptTemplateName": "source-grounded-explainer",
+  "referenceStudy": {
+    "sourceUrl": "https://www.youtube.com/@SomeGuyWhoKnowsStuff",
+    "transcriptPaths": [
+      "_research/some-guy-who-knows-stuff/transcripts/4S1T6M7OhqU.txt",
+      "_research/some-guy-who-knows-stuff/transcripts/ETIW4YSx2w4.txt",
+      "_research/some-guy-who-knows-stuff/transcripts/HgVpsgTfdt8.txt",
+      "_research/some-guy-who-knows-stuff/transcripts/Hz4K-iBlAT8.txt",
+      "_research/some-guy-who-knows-stuff/transcripts/XVQdhpwO75g.txt"
+    ],
+    "imagePaths": [
+      "channels/barely-an-expert.references/characters.png",
+      "channels/barely-an-expert.references/scenes.png",
+      "channels/barely-an-expert.references/diagrams.png"
+    ],
+    "thumbnailPaths": [
+      "channels/barely-an-expert.references/thumbnails-1.jpg",
+      "channels/barely-an-expert.references/thumbnails-2.jpg",
+      "channels/barely-an-expert.references/thumbnail.jpg"
+    ]
+  },
+  "descriptionFormat": "Plain text description with a short original one-line invitation appropriate to Barely An Expert, then a blank line and ten chapter lines in video order, Number ten first. Each chapter line is mm:ss followed by the short chapter title, without countdown numbering. First chapter begins 00:00. CRITICAL: use measured starts from the FINAL voice alignment and assembled timeline. Never estimate publishable timestamps from word counts or an assumed words-per-minute rate. If final audio is unavailable, leave chapters pending and regenerate after voice completion. Recompute after every narration or timing change and check against the rendered video. After chapters, include a concise Sources section with primary-source titles and working URLs supporting significant claims; date changing headline statistics. Cite sources checked during research, not unchecked entries or source-channel videos as factual proof. Add required music attribution when applicable. No invented citations, placeholder timestamps, hashtags or duplicated promotion.",
+  "secondsPerImage": 4.3,
+  "visualStyle": "Simple black line drawings with large white rounded heads, small dot/dash eyes, thin brows and single-stroke limbs; simple flat garments where relevant. Match actual reference pixels, not polished big-eyed clipart. Broad flat fills with occasional restrained gradients or shadows. Flat fields, simple interiors, shallow scenic perspective, layered terrain, diagrams and maps are all allowed. Varied close-ups, human actions, objects, short labels and purposeful speech bubbles. Avoid surface texture overload, detailed painted terrain and inconsistent character construction.",
+  "voiceNotes": "Calm, clear and measured American male read with normal clause pauses and natural variation. Mostly third-person explanatory prose, mild curiosity and modest stress on useful words. Do not flatten every sentence into the same cadence. Source runtime averages are planning evidence, not a timbre assessment; retain the configured voice and use its final measured audio for duration and chapter timestamps.",
+  "voice": {
+    "voiceId": "w7Ht0Z2E3mdProlicOSM",
+    "voiceName": "Barely An Expert narrator - calm American documentary read, built from barely-an-expert.voice.md",
+    "modelId": "eleven_v3",
+    "stability": 0.4,
+    "similarityBoost": 0.75,
+    "wordsPerMinute": 152.4
+  },
+  "music": true,
+  "youtube": {
+    "categoryId": "27",
+    "defaultTags": [
+      "unexplained",
+      "mysteries",
+      "science",
+      "history",
+      "top 10",
+      "documentary",
+      "facts",
+      "unsolved"
+    ],
+    "titlePattern": "{topic}",
+    "descriptionFooter": ""
+  },
+  "identity": {
+    "handle": "barelyanexpert",
+    "bio": "Barely an expert who goes and reads the actual research, then explains what it says.\n\nNew video every week.",
+    "byline": "Barely an expert",
+    "keywords": [
+      "unexplained",
+      "unsolved mysteries",
+      "science mysteries",
+      "history mysteries",
+      "top 10",
+      "countdown",
+      "documentary",
+      "strange facts",
+      "open questions"
+    ],
+    "links": [],
+    "avatarPrompt": "A LINE DRAWING ON PURE WHITE. The background is plain white to all four edges - no colour field, no vignette, no texture, no border, no shading anywhere.\nDraw ONE head, and nothing else. It is an outline only: the inside of the head is the SAME WHITE as the background, never filled with a colour or a grey. Ink should cover well under a tenth of the square.\nThe outline is deliberately hand-drawn and imperfect - a rounded blob a little wider across the top than at the jaw, with a visible wobble in the line. NOT a compass circle, not a smooth vector shape. Solid black, even marker weight, about 2 percent of the image width.\nThe head is centred and spans roughly two thirds of the width, with a single neck line running from the chin straight down and off the bottom edge.\nFeatures, and only these: two small solid black eyes, slightly irregular and not identical; ONE eyebrow raised above the left eye; and a short curved mouth in a small, faintly uncertain half-smile. Three or four short curved strokes stand up from the crown as hair, one of them flicking forward.\nNo nose, no ears, no glasses, no body, no arms, no held object. No colour anywhere in the image. No text, no logo.\nIt has to read at 32 pixels, which it does because the head is LARGE and the features are few and widely spaced - not because the lines are thick.",
+    "bannerPrompt": "A single full-bleed scene on a DEEP NAVY, almost-black starfield, edge to edge across the whole image. Bright saturated colours against that dark ground - this is the one place the channel is not muted.\nStructure it in three horizontal layers:\nABOVE the white bar: objects floating in the dark - a glowing deep-sea anglerfish, an ammonite fossil, a comet with a long pale tail, a ringed planet, a fork of lightning. Spread out, not crowded.\nTHE MIDDLE BAND: a solid white bar. It does NOT reach the left edge of the image. Its left end starts ONE FIFTH of the way in from the left edge, and it runs right to about three fifths across. The whole outer fifth on the left stays dark starfield - leave it empty of anything important. Top and bottom edges of the bar sit at roughly 35 and 65 percent of the image height.\nA small round-headed stick figure stands just inside the LEFT END of that bar, arms out, drawn in the channel style - large white head, thin black limbs. The headline sits to its right, both of them comfortably on the white. Nothing that matters may sit in the outer fifth on either side, or in the top third or bottom third: those are cropped away on a phone.\nBELOW the white bar: a row of four round-headed characters seen close up, big expressive faces with flat simple hair - puzzled, squinting, astonished - cropped by the bottom edge so only heads and shoulders show.\nLet two or three objects OVERLAP the right-hand end of the white bar and sit in front of it: a cracked stone tablet, a rolled star chart, a radio telescope dish.\nThick even black outlines on everything, flat fills, no rendered texture and no painted landscape. No channel name, no watermark, no subscribe button, and no lettering except the one line specified above.",
+    "bannerHeadline": "Subscribe. New Video Every Week."
+  }
+}

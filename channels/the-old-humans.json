@@ -1,0 +1,138 @@
+{
+  "name": "The Old Humans",
+  "tagline": "Everything you did today, done 50,000 years ago, when it could kill you",
+  "persona": "A curious, plain-spoken narrator who explains prehistory by starting from something the viewer did this morning. Talks like a well-read friend rather than a documentary voice - warm, direct, occasionally funny, never theatrical, never a character. Builds every claim on real archaeology: a named site, a country, a date, a published finding, a named researcher. Says plainly when the evidence runs out instead of overclaiming. Treats ancient people as competent adults solving hard problems, never as grunting cavemen, and keeps making the same move - the thing you take for granted today was, for almost all of human history, a matter of survival.",
+  "audience": "General viewers with no background in archaeology who like feeling smarter after eight minutes. The same people who watch history and science explainers: they will not tolerate being talked down to, and a decent share of them will read the sources.",
+  "tone": "Conversational, confident, quietly amazed. Escalates through specificity and evidence, never through volume or dramatic music.",
+  "videoLengthTargetMinutes": 7,
+  "videoLengthMinMinutes": 7,
+  "videoLengthMaxMinutes": 11,
+  "scriptVoiceRules": "Second person, present tense, and always about the viewer's own life - open inside their morning and keep returning to it. Vary sentence length hard: long flowing explanatory sentences broken by three- and four-word fragments ('That's beer.' 'Actual bedding.' 'You're not bored, you're trapped.'). Median about 12 words; never run past 30. Contractions and everyday words; if a technical term is unavoidable, define it in the same breath. EVERY factual claim gets an anchor - a named site with its country, a date, a number with its unit, a journal, or a named researcher and what they argue. Say 'at Blombos Cave in South Africa, a 100,000-year-old ochre workshop', never 'scientists found'. Name at least one real researcher per script. Convert big numbers into something a body can feel rather than stating them flat. Signpost every section change out loud and conversationally - 'Let's start with the obvious one', 'But here's the thing', 'Now, here's where it gets interesting', 'And that leads to something bigger'. Where the evidence is thin, say so and keep going: 'we can't prove it, but the logic holds together'. Allow ONE or TWO dry first-person asides in the whole script, never more. Never call ancient people primitive, stupid or grunting - they were as clever as the viewer and had harder problems. NEVER say 'in this video', 'let's dive in', 'stick around', 'as you can see', or ask for likes or subscribers. No greeting, no host name, no channel name. Finish by turning the whole thing back on the viewer's comfortable modern life.",
+  "scriptStructure": [
+    "COLD OPEN - YOUR LIFE RIGHT NOW (~10%): Open on something the viewer is doing or feeling at this exact moment - warm, fed, dry, woken by an alarm. Make them notice it. Then state that for almost all of human history this same ordinary thing was a matter of survival.",
+    "THE SAME DAY, 50,000 YEARS AGO (~12%): Replay that scene in the deep past in second person, physical and concrete. Escalate into the specific ways it could kill them, then state the question the video answers in one plain sentence.",
+    "THREAT ONE (~12%): Name the first danger out loud and explain the mechanism, anchored to a real site, number or finding.",
+    "THREAT TWO (~12%): The second danger, named, with different evidence.",
+    "THREAT THREE (~12%): The third, usually the one nobody expects, with the most concrete detail.",
+    "WHAT THEY ACTUALLY DID (~20%): The solutions, in the order they would have been reached, each anchored to named archaeology. This is the substance of the video.",
+    "THE PART NOBODY TALKS ABOUT (~12%): The turn - the counterintuitive upside, or the thing this pressure accidentally created. Hedge honestly where the evidence is thin.",
+    "RECAP LADDER (~6%): Run the whole answer back as a short ladder of short sentences.",
+    "CLOSE ON THE VIEWER (~4%): Return to the exact image from the cold open, contrast it with everything just shown, and land one line about what they no longer have to feel. Stop there."
+  ],
+  "scriptTemplates": [
+    {
+      "name": "modern-comfort-flip",
+      "lastUsedUtc": "2026-08-24T02:54:51.2208843Z",
+      "sections": [
+        "COLD OPEN - YOUR LIFE RIGHT NOW (~10%): Open on something the viewer is doing or feeling at this exact second - warm, dry, fed, woken by an alarm, moving at 40 miles an hour without using a muscle. Make them notice it, then say plainly that for almost all of human history this same ordinary thing was a matter of survival.",
+        "THE SAME DAY, 50,000 YEARS AGO (~12%): Replay that scene in the deep past, in second person, physical and concrete - what you can see, what you cannot do, what is getting worse. Escalate into the specific ways it could kill you, then state the question the video answers in one plain sentence.",
+        "THREAT ONE (~12%): Name the first danger out loud and explain the mechanism plainly, anchored with a real number and its unit or a named site.",
+        "THREAT TWO (~12%): The second danger, named, built on different evidence - a dated excavation, a sediment layer, a skeleton.",
+        "THREAT THREE (~12%): The third, usually the one nobody expects, given the most concrete and physical detail of the three.",
+        "WHAT THEY ACTUALLY DID (~20%): The solutions, in the order people would have reached them, each anchored to a named site with its country and date. This is the substance of the video - go slow and be specific.",
+        "THE PART NOBODY TALKS ABOUT (~12%): The turn. Either the counterintuitive upside of the thing that was killing them, or the thing this pressure accidentally created - art, culture, technology. Hedge honestly where the evidence is thin.",
+        "RECAP LADDER (~6%): Run the whole answer back as a ladder of short sentences, one per thing they did.",
+        "CLOSE ON THE VIEWER (~4%): Return to the exact image from the cold open, contrast it with what was just shown, and land one line on what they no longer have to feel. Stop there."
+      ]
+    },
+    {
+      "name": "deep-time-ladder",
+      "lastUsedUtc": "2026-09-02T06:30:36.4913009Z",
+      "sections": [
+        "THE THING YOU DID WITHOUT THINKING (~10%): Open on the viewer doing the ordinary thing - drinking, dressing, sleeping, eating. State that they did it without a thought, and that it is one of the oldest things a human being can do.",
+        "OLDER THAN YOU THINK (~10%): Push the origin further back than anyone expects. Older than writing. Older than farming. Possibly older than our species. Land the surprise date plainly.",
+        "THE ORIGIN (~18%): The earliest evidence, with the named researcher who argues for it and what their hypothesis actually says. Explain the mechanism in plain language, and be clear about how strong the evidence is.",
+        "THE FIRST HARD EVIDENCE (~18%): The oldest confirmed find - a named site, its country, its date, what residue or artefact proved it, and how they tested it.",
+        "THE SITE THAT CHANGES THE STORY (~18%): The find that reverses the accepted order of events. State the old story first, in the version everyone was taught, then the reversal, then what it implies.",
+        "IT RUNS A CIVILISATION (~15%): The same thing embedded into a whole society - wages, rituals, medicine, law - with the specific numbers that make it real.",
+        "THE LADDER AND THE REFRAME (~11%): Count the dates back down in order, oldest to newest, one short sentence each. Then the reframe: this may not have followed civilisation, it may be why civilisation happened. Return to the viewer's own hand. Stop."
+      ]
+    },
+    {
+      "name": "cast-of-characters",
+      "sections": [
+        "WE WERE NOT ALONE (~12%): Open on the premise that the world used to be full of them - other human species, other peoples, other ways of being human - and tease each one in a single striking line. End on the question of what happened to the rest.",
+        "THE FIRST ONE (~18%): Who they were, when and where they lived, the one detail that makes them unforgettable, and how their story ended. Anchor to fossils, dates and places.",
+        "THE SECOND ONE (~18%): Same shape, and use it to demolish whatever the audience wrongly believes about them.",
+        "THE THIRD ONE (~15%): Same shape. Prefer the one known from almost nothing - a single bone, a handful of teeth - and make the smallness of the evidence part of the story.",
+        "THE FOURTH ONE (~12%): Same shape, shorter, the strangest of the group.",
+        "SO WHY US (~15%): Ask the title question directly. Dismiss the obvious answer and show why it falls apart, then give the better answer, and admit how much of it was luck.",
+        "CLOSE (~10%): They were not early drafts of us. They were their own kinds of human. Land the last line on how recently we became the only ones left. Stop."
+      ]
+    },
+    {
+      "name": "the-story-was-wrong",
+      "sections": [
+        "WHAT EVERYONE BELIEVES (~14%): State the myth generously and in full, the way it is taught in school and drawn in every illustration. Make it sound reasonable, because it is.",
+        "WHERE THE STORY CAME FROM (~14%): Who first said it, in what year, and why it was believable at the time. Be fair to them - they were working with what they had.",
+        "THE FIND THAT BROKE IT (~22%): The excavation, study or dated artefact that does not fit. Name the site, the country, the year and the researcher, and explain exactly which part of the old story it makes impossible.",
+        "THE REAL PICTURE (~28%): Rebuild what actually happened in three or four ordered steps, each anchored with evidence. Where the record is thin, say so and give the best current reading rather than pretending.",
+        "WHY THE MYTH SURVIVED (~12%): Explain why the wrong version is still the one everybody knows - it was simpler, it flattered us, or it made a better picture.",
+        "CLOSE (~10%): What believing the wrong version cost us, in one line, and what the true version says about the viewer. Stop there."
+      ]
+    },
+    {
+      "name": "accidental-invention",
+      "sections": [
+        "THE OBJECT IN YOUR HAND (~12%): Open with the viewer using the finished modern thing without a thought. State that someone had to invent it, and that nobody set out to.",
+        "NOBODY WAS TRYING TO MAKE THIS (~12%): Establish what people were actually trying to do at the time, which was something else entirely, and why that mattered more to them.",
+        "THE FIRST ACCIDENT (~20%): The unplanned event or observation that produced the first version - where, when, and how we know. Explain the physical mechanism plainly.",
+        "THE WRONG PURPOSE (~20%): The thing was used for something other than what it became - medicine, ritual, decoration, a toy. Give the dated evidence, and be honest that it stayed that way for a long time.",
+        "THE MOMENT IT BECAME THE THING (~20%): The step that turned it into what the viewer holds, and what had to already exist before that step was possible.",
+        "THE CHAIN, RUN BACK (~8%): Retrace the accidents in order, one short sentence each, to show that no single person invented it.",
+        "CLOSE (~8%): Land that the object in their hand is a stack of accidents nobody planned. Return to the opening image. Stop."
+      ]
+    }
+  ],
+  "scriptTemplateName": "",
+  "descriptionFormat": "Write the description in this exact house format, as plain text with no markdown, no bold, no headings and no bullet characters other than the ones shown.\n\nLine 1: the video title, exactly as given.\nThen a blank line, then 2-3 sentences that restate the hook and say what the video actually covers.\nThen a blank line and this line on its own: All research and sources are linked below.\nThen a line of 20 em dashes as a separator.\nThen the heading: RESEARCH & SOURCES:\nThen 6-12 entries, each on its own line, each starting with the character '>' and a space, in the order the narration uses them:\n> Site, person or claim — \"exact title of the paper or book\" (year, journal or publisher) link — one clause on what it showed.\nThen a separator line of 20 em dashes.\nThen the heading: PEOPLE & SITES MENTIONED IN THIS VIDEO:\nThen 4-8 entries, each starting with '>' and a space: the name, an em dash, then 1-3 sentences saying who or what it is, what was found there, and why it matters.\n\nACCURACY RULES - these override the format and matter more than filling it out:\n- Only cite work you are genuinely confident exists, with the right author, year and venue. If you are unsure of the exact title or journal, state the finding and the researcher's name and leave the citation details out rather than inventing them.\n- NEVER invent a DOI, URL or publication year. Omit the link unless you are certain of it - a missing link is fine, a wrong one is not.\n- Every entry must correspond to a claim actually made in the narration. Do not pad the list with sources the video never uses.\n- Keep the whole description under 4,000 characters; a footer is appended after it and YouTube's hard limit is 5,000.\n- No hashtags anywhere - the footer supplies those.",
+  "secondsPerImage": 0.0,
+  "visualStyle": "Round-headed stick characters - thin black limbs, big ivory heads, dot eyes, expressive brows - acting inside fully painted 16:9 scenes: caves, savanna, snowstorms, ancient temples, with warm firelight against cold exteriors. Alternates with plain cream-background cards carrying one idea, big bold black caps text, simple labelled diagrams and dated timeline strips.",
+  "imageProvider": "gflow",
+  "voiceNotes": "Young American male narrator, mid-to-late twenties, conversational rather than announcer-trained. Fast - around 210 words per minute - but never rushed: the pace of someone telling you something they genuinely find interesting. Warm and slightly amused, with real emphasis landing on the numbers and the site names. Rises into the setup of a reveal and drops flat on the payoff line. No documentary gravitas, no dramatic whisper, no upsell energy, no smile-in-every-word radio voice. A short pause before 'But here's the thing', and after each named payoff.",
+  "voice": {
+    "voiceId": "T4WvBCen4IU6KglNDupg",
+    "voiceName": "The Old Humans narrator - conversational American (mid-20s), built in ElevenLabs Voice Design from the-old-humans.voice.md",
+    "modelId": "eleven_v3",
+    "stability": 0.45,
+    "similarityBoost": 0.75,
+    "wordsPerMinute": 173.3
+  },
+  "music": true,
+  "youtube": {
+    "categoryId": "22",
+    "defaultTags": [
+      "ancient humans",
+      "prehistory",
+      "stone age",
+      "human evolution",
+      "archaeology",
+      "early humans",
+      "paleolithic",
+      "human history"
+    ],
+    "titlePattern": "{topic}",
+    "descriptionFooter": "\n\n————————————————————\n\nAnimation by The Old Humans - everything you did today, done 50,000 years ago, when it could kill you.\n\n————————————————————\n\n#ancienthumans #prehistory #stoneage #archaeology #humanevolution #earlyhumans #paleolithic #history #explainer #animation"
+  },
+  "identity": {
+    "handle": "theoldhumans",
+    "bio": "The Old Humans takes something you did today without thinking - drinking, sleeping, getting dressed, staying warm - and asks what it took to do the same thing 50,000 years ago.\n\nEvery video is built on published archaeology: named sites, dated finds, and the researchers who dug them up. Where the evidence runs out, we say so.\n\nThe people in these videos were not primitive. They were as clever as you are, with much harder problems. New video every week.",
+    "byline": "Everything you did today, done 50,000 years ago",
+    "keywords": [
+      "ancient humans",
+      "prehistory",
+      "stone age",
+      "paleolithic",
+      "human evolution",
+      "archaeology",
+      "early humans",
+      "neanderthals",
+      "hunter gatherers",
+      "human history"
+    ],
+    "links": [],
+    "avatarPrompt": "HEAD AND SHOULDERS ONLY of a single character in the channel style: a big ivory circular head, thick even black outline, scribbled brown hair, and the top of a spotted-hide tunic at the very bottom edge. No body, no legs, no held objects. Eyes are two SMALL simple black ovals with a visible upper eyelid line and thin expressive eyebrows - deadpan, faintly amused. Absolutely no large glossy cartoon eyes, no eye highlights, no anime or Pixar styling, no cute-mascot look. Flat matte shading only: the head is one solid ivory shape with no gradient or glow. Flat solid warm ochre background, no texture, no vignette. The head is dead centre and fills about 70 percent of the square, with even margin all round, because YouTube crops this to a circle and anything near a corner or the bottom edge is cut off. It must still read at 32 pixels. No text, no logo, no border.",
+    "bannerPrompt": "A single evenly spaced ROW of seven characters standing side by side across the width, all the same size, all standing on the same invisible ground line, drawn in the channel style: thin black stick limbs, big ivory round heads with two SMALL black oval eyes and a visible upper eyelid line, deadpan or faintly amused, scribbled brown hair, spotted-hide tunics. Each is doing one ordinary thing, left to right: knapping a flint, carrying a burning ember, painting a handprint on a cave wall, sewing a hide with a bone needle, holding a stone cup, feeding a small campfire, and at the far right ONE modern figure in a flat blue t-shirt looking at a phone. Flat solid warm sand background, no scenery, no horizon, no texture, no shading, no gradient. Thick even black outlines and flat colours only - no glossy cartoon eyes, no anime styling. Spacing is the most important thing: the seven figures are spread EVENLY across the FULL width with equal gaps, the leftmost figure starting right at the left edge and the rightmost ending right at the right edge. No empty margin at either end, no clustering to one side, no blank third. All seven are the same height and stand on the same line, vertically centred with generous even space above their heads and below their feet. No text, no logo, no border.",
+    "bannerHeadline": ""
+  }
+}
